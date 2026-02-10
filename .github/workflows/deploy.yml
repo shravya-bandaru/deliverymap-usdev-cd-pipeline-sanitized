@@ -498,6 +498,7 @@ jobs:
       # -----------------------------------------------------------------------
       - name: Push WayDev metadata
         if: always()
+        continue-on-error: true
         run: |
           dateTimeNow=$(date "+%Y-%m-%d %H:%M:%S")
           data=$(cat <<EOF
