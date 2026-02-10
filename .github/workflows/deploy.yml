@@ -120,29 +120,12 @@ jobs:
 
     steps:
       # -----------------------------------------------------------------------
-      # 1. Checkout repositories (replaces ADO multi-repo checkout)
+      # 1. Checkout repository (all folders are in the same repo)
       # -----------------------------------------------------------------------
-      - name: Checkout ConcourseCore (self)
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          path: ConcourseCore
           fetch-depth: 0
-
-      - name: Checkout tech-enablement config
-        uses: actions/checkout@v4
-        with:
-          repository: pwc-us-adv-tech-enablement/tech-enablement
-          ref: ${{ matrix.service.techEnablementConfigBranch || 'main' }}
-          path: microserviceConfig
-          token: ${{ secrets.TECH_ENABLEMENT_PAT }}
-
-      - name: Checkout administration scripts
-        uses: actions/checkout@v4
-        with:
-          repository: ConcourseCore/administration          # adjust org/repo as needed
-          ref: main
-          path: administration
-          token: ${{ secrets.ADMIN_REPO_PAT }}
 
       # -----------------------------------------------------------------------
       # 2. Resolve config branches (replaces ADO "Validate & Set Branch Targets")
@@ -174,20 +157,20 @@ jobs:
       # -----------------------------------------------------------------------
       # 3. Switch ConcourseCore branch (kube config)
       # -----------------------------------------------------------------------
-      - name: Switch ConcourseCore branch
+      - name: Switch ConcourseCore branch (if needed)
         working-directory: ConcourseCore
         run: |
           git fetch --all
-          git checkout "${{ env.concourseCoreConfigBranch }}"
+          git checkout "${{ env.concourseCoreConfigBranch }}" || echo "Using current branch"
 
       # -----------------------------------------------------------------------
-      # 4. Switch Tech-Enablement branch
+      # 4. Switch Tech-Enablement branch (if needed)
       # -----------------------------------------------------------------------
-      - name: Switch Tech-Enablement branch
-        working-directory: microserviceConfig
+      - name: Switch Tech-Enablement branch (if needed)
+        working-directory: tech-enablement
         run: |
           git fetch --all
-          git switch "${{ env.techEnablementConfigBranch }}"
+          git switch "${{ env.techEnablementConfigBranch }}" || echo "Using current branch"
 
       # -----------------------------------------------------------------------
       # 5. Compute K8S naming variables (replaces ADO compile-time expressions)
@@ -257,7 +240,7 @@ jobs:
           contains(fromJson('["us-stage","us-prod","emea-stage","emea-prod","apac-stage","apac-prod"]'),
           inputs.ENVIRONMENT)
         run: |
-          FILE_PATH="${{ github.workspace }}/microserviceConfig/config/docker.k8.yml"
+          FILE_PATH="${{ github.workspace }}/tech-enablement/config/docker.k8.yml"
           echo "Pre Replace"
           grep SERVICE_HOST "$FILE_PATH" || true
 
@@ -320,7 +303,7 @@ jobs:
         run: |
           python3 scripts/replace-tokens.py \
             "ConcourseCore/k8s/${{ matrix.service.name }}/service.yaml" \
-            "${{ github.workspace }}/microserviceConfig/config/docker.k8.yml" \
+            "${{ github.workspace }}/tech-enablement/config/docker.k8.yml" \
             "ConcourseCore/k8s/${{ matrix.service.name }}/deployment.yaml" \
             "ConcourseCore/k8s/${{ matrix.service.name }}/hpa.yaml" \
             "ConcourseCore/k8s/${{ matrix.service.name }}/configs/${{ inputs.ENVIRONMENT }}/${{ matrix.service.name }}.configmap.yaml"
@@ -345,7 +328,7 @@ jobs:
             config.yaml: |
           EOF
 
-          cat "${{ github.workspace }}/microserviceConfig/config/docker.k8.yml" | sed -e 's/^/    /' >> "$TARGET_FILE"
+          cat "${{ github.workspace }}/tech-enablement/config/docker.k8.yml" | sed -e 's/^/    /' >> "$TARGET_FILE"
 
       # -----------------------------------------------------------------------
       # 12. Azure Login (replaces ADO Azure service connection)
