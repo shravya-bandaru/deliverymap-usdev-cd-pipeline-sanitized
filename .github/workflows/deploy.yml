@@ -102,6 +102,7 @@ jobs:
   deploy-service:
     needs: setup-matrix
     runs-on: ubuntu-latest
+    continue-on-error: true  # Allow services without manifests to fail gracefully
     strategy:
       fail-fast: false
       max-parallel: 5
@@ -128,9 +129,24 @@ jobs:
           fetch-depth: 0
 
       # -----------------------------------------------------------------------
+      # 1a. Check if service manifests exist (skip if not)
+      # -----------------------------------------------------------------------
+      - name: Check if service folder exists
+        id: check-service
+        run: |
+          if [ ! -d "ConcourseCore/k8s/${{ matrix.service.name }}" ]; then
+            echo "Service folder ConcourseCore/k8s/${{ matrix.service.name }} does not exist - skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Service folder exists - proceeding with deployment"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # -----------------------------------------------------------------------
       # 2. Resolve config branches (replaces ADO "Validate & Set Branch Targets")
       # -----------------------------------------------------------------------
       - name: Resolve config branches
+        if: steps.check-service.outputs.skip != 'true'
         id: branches
         run: |
           CONFIG_BRANCH="${{ matrix.service.configBranch }}"
