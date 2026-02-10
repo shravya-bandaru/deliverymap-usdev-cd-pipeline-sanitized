@@ -301,7 +301,7 @@ jobs:
       # -----------------------------------------------------------------------
       - name: Replace <{VARIABLE}> tokens in manifests
         run: |
-          python3 scripts/replace-tokens.py \
+          python3 administration/scripts/python/replace-tokens.py \
             "ConcourseCore/k8s/${{ matrix.service.name }}/service.yaml" \
             "${{ github.workspace }}/tech-enablement/config/docker.k8.yml" \
             "ConcourseCore/k8s/${{ matrix.service.name }}/deployment.yaml" \
@@ -411,7 +411,7 @@ jobs:
       # -----------------------------------------------------------------------
       - name: Create kustomization.yaml
         run: |
-          bash scripts/bake-secretmap.sh \
+          bash administration/scripts/bash/bake-secretmap.sh \
             -s "${{ env.SECRETMAP_NAME }}" \
             -p "${{ github.workspace }}/envs" \
             > "${{ github.workspace }}/kustomization.yaml"
