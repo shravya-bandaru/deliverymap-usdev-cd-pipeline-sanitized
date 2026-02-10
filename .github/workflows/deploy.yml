@@ -408,6 +408,7 @@ jobs:
       # 17. Fetch secrets from Azure Key Vault (replaces ADO AzureCLI@2 task)
       # -----------------------------------------------------------------------
       - name: Fetch secrets from Azure Key Vault
+        continue-on-error: true
         run: |
           IFS=',' read -ra SECRETS <<< "${{ steps.get-secrets.outputs.APP_SECRETS }}"
           mkdir -p "${{ github.workspace }}/envs"
@@ -429,6 +430,7 @@ jobs:
       # 18. Bake Kustomize secret manifest (replaces ADO KubernetesManifest bake)
       # -----------------------------------------------------------------------
       - name: Create kustomization.yaml
+        continue-on-error: true
         run: |
           bash administration/scripts/bash/bake-secretmap.sh \
             -s "${{ env.SECRETMAP_NAME }}" \
@@ -438,6 +440,7 @@ jobs:
           cat "${{ github.workspace }}/kustomization.yaml"
 
       - name: Bake secrets with Kustomize
+        continue-on-error: true
         run: |
           kubectl kustomize "${{ github.workspace }}/" \
             > "${{ github.workspace }}/concourse-api-secrets.yaml"
@@ -447,6 +450,7 @@ jobs:
       # 19. Deploy Secrets to AKS
       # -----------------------------------------------------------------------
       - name: Deploy Secrets
+        continue-on-error: true
         run: |
           kubectl apply -f "${{ github.workspace }}/concourse-api-secrets.yaml" \
             -n "${{ env.MESH_K8S_NAMESPACE }}"
