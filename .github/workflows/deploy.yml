@@ -84,33 +84,22 @@ env:
 
 jobs:
   # ===========================================================================
-  # Job 1 — Build the dynamic matrix from services.json
-  # ===========================================================================
-  setup-matrix:
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Build service matrix from services.json
-        id: set-matrix
-        run: |
-          MATRIX=$(cat services.json | jq -c '.')
-          echo "matrix={\"service\":$MATRIX}" >> "$GITHUB_OUTPUT"
-
-  # ===========================================================================
-  # Job 2 — Deploy each service (replaces ADO "${{ each service }}" loop)
+  # Deploy each service (replaces ADO "${{ each service }}" loop)
   # ===========================================================================
   deploy-service:
-    needs: setup-matrix
     runs-on: ubuntu-latest
     continue-on-error: true  # Allow services without manifests to fail gracefully
     strategy:
       fail-fast: false
       max-parallel: 5
-      matrix: ${{ fromJson(needs.setup-matrix.outputs.matrix) }}
+      matrix:
+        service:
+          - name: concourse-deliverymap-svc
+            shortName: deliverymap
+            contextPath: deliverymap
+            buildId: 2.12.6-feature.1-add-missing-attr.1-2025-05-20.1394.1
+            concourseCoreConfigBranch: develop
+            techEnablementConfigBranch: main
 
     # -------------------------------------------------------------------------
     # Per-job environment — uses the GitHub Actions Environment matching the
