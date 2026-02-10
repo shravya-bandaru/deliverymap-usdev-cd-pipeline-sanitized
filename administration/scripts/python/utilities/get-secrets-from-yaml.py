@@ -40,9 +40,8 @@ def main(service_name, manifest):
                 list_secret_name.append(
                     to_camel_case(secret["valueFrom"]["secretKeyRef"]["key"])
                 )
-            print(
-                f'##vso[task.setvariable variable=APP_SECRETS]{str.join(",",list_secret_name)}'
-            )
+            # Output for GitHub Actions
+            print(f'APP_SECRETS={str.join(",",list_secret_name)}')
 
         except yaml.YAMLError as exc:
             if hasattr(exc, "problem_mark"):

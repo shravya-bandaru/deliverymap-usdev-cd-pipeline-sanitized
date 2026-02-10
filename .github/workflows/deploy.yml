@@ -396,9 +396,10 @@ jobs:
         id: get-secrets
         run: |
           cd administration/scripts/python/utilities
-          python3 get-secrets-from-yaml.py \
+          OUTPUT=$(python3 get-secrets-from-yaml.py \
             --service-name "${{ env.SERVICE_NAME }}" \
-            --manifest "${{ github.workspace }}/ConcourseCore/k8s/${{ matrix.service.name }}/deployment.yaml"
+            --manifest "${{ github.workspace }}/ConcourseCore/k8s/${{ matrix.service.name }}/deployment.yaml")
+          echo "$OUTPUT" >> $GITHUB_OUTPUT
 
       - name: Validate secret names
         run: echo "APP_SECRETS=${{ steps.get-secrets.outputs.APP_SECRETS }}"

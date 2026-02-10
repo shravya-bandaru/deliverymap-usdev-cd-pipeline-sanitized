@@ -393,3 +393,7 @@ Print or save this checklist:
 - [ ] All secrets added to GitHub repository ✓
 - [ ] AKS cluster running ✓
 - [ ] Namespace `co-mesh` created ✓
+
+
+
+need no azure credentials not service principal
