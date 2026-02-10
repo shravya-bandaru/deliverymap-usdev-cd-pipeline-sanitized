@@ -79,7 +79,7 @@ env:
   ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
   MESH_K8S_NAMESPACE: co-mesh
   ASB_QUEUE_SUFFIX: ${{ inputs.ASB_QUEUE_SUFFIX }}
-  RELEASE_LABEL: ${{ inputs.RELEASE_LABEL }}
+  RELEASE_LABEL: ${{ inputs.RELEASE_LABEL || 'stable' }}
   REPLICAS: "1"
 
 jobs:
