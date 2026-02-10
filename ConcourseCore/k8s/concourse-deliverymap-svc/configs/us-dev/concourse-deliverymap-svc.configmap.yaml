@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: <{CONFIGMAP_NAME}>
+  namespace: <{K8S_NAMESPACE_MESH}>
+data:
+  app_env: dev
+  azure_key_vault_url: sanitized
+  concourse_config_directory: /configs-yaml
+  concourse_config_filename: config.yaml
+  dd_profiling_enabled: 'true'
+  dd_profiling_timeline_enabled: '1'
+  dd_trace_debug: 'false'
+  dd_trace_startup_logs: 'false'
+  fabric_publishing_client_id_admin: sanitized
+  fabric_publishing_client_id_core: sanitized
+  fabric_publishing_eventhub_name_admin: eh-05
+  fabric_publishing_eventhub_name_core: eh-07
+  fabric_publishing_eventhub_topic_admin: ConcourseAdmin-Dev
+  fabric_publishing_eventhub_topic_core: Concourse
+  fabric_publishing_mute_admin: 'false'
+  fabric_publishing_mute_core: 'false'
+  log_level: debug
+  mongodb_schema: deliverymap-svc-2-6-0
+  mongodb_uri: sanitized
+  mongodb_user: sanitized
+  mongodb_url: sanitized
+  mongodb_min_pool_size: '0'
+  mongodb_max_pool_size: '100'
+  mongodb_max_connecting: '2'
+  mongodb_socket_timeout_ms: '300000'
+  mongodb_max_idle_timeout: sanitized
+  mongodb_enable_pool_monitor: 'true'
+  redis_connection_host: sanitized
+  redis_connection_port: '6380'
+  redis_connection_tls: 'true'
+  redis_enable: 'true'
+  work_item_configs_collection: WorkItemConfigs
+  work_plan_configs_collection: WorkPlanConfigs
+  service_accounts_superuser_whitelist: sanitized
+  service_accounts_whitelist: sanitized
+  enabled_replicas: 'true'
+  enable_swagger: 'true'
+  blob_storage_account_name: sanitized
+  blob_storage_container_name: deliverymap
+  blob_storage_folder_path: translations
+  translator_url: sanitized
+  cache_module_enable: 'true'

@@ -1,0 +1,19 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: <{SERVICE_NAME}><{SERVICE_HOST_SUFFIX}>
+spec:
+  selector:
+    tags.datadoghq.com/service: "<{SERVICE_NAME}>"
+    <{K8S_RELEASE_LABEL}>
+  ports:
+    - port: 80
+      targetPort: 5018
+      name: http
+      protocol: TCP
+    - appProtocol: tcp
+      name: tcp
+      port: 5019
+      protocol: TCP
+      targetPort: 5019

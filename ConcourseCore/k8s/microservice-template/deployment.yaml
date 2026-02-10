@@ -1,0 +1,191 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: <{DEPLOYMENT_NAME}>
+  namespace: <{K8S_NAMESPACE_MESH}>
+spec:
+  replicas: <{REPLICAS}>
+  selector:
+    matchLabels:
+      tags.datadoghq.com/service: <{SERVICE_NAME}>
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 50%
+      maxUnavailable: 50%
+  template:
+    metadata:
+      labels:
+        tags.datadoghq.com/version: <{ver}>
+        tags.datadoghq.com/service: <{SERVICE_NAME}>
+        release: <{RELEASE_LABEL}>
+    spec:
+      dnsConfig:
+        options:
+        - name: ndots
+          value: '3'
+      imagePullSecrets:
+      - name: sanitized
+      volumes:
+      - name: config-yaml
+        configMap:
+          name: <{CONFIGMAP_YAML_NAME}>
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: sanitized
+                operator: NotIn
+                values:
+                - system
+      containers:
+      - name: <{SERVICE_NAME}>
+        image: sanitized
+        imagePullPolicy: IfNotPresent
+        resources:
+          requests:
+            cpu: 50m
+            memory: 200Mi
+          limits:
+            cpu: '10'
+            memory: 3Gi
+        ports:
+        - containerPort: 80
+        - containerPort: 5018
+        - containerPort: 5019
+        livenessProbe:
+          httpGet:
+            path: /v3/auth/health
+            port: 5018
+          initialDelaySeconds: 180
+          periodSeconds: 10
+          failureThreshold: 3
+          successThreshold: 1
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /v3/auth/health
+            port: 5018
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 2
+          successThreshold: 1
+          timeoutSeconds: 5
+        startupProbe:
+          httpGet:
+            path: /v3/auth/health
+            port: 5018
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 3
+          successThreshold: 1
+          timeoutSeconds: 5
+        volumeMounts:
+        - name: config-yaml
+          mountPath: /configs-yaml
+          readOnly: true
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: APP_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: ASB_CONNECTION1
+          valueFrom:
+            secretKeyRef:
+              name: sanitized
+              key: sanitized
+        - name: ASB_CONNECTION2
+          valueFrom:
+            secretKeyRef:
+              name: sanitized
+              key: sanitized
+        - name: CONCOURSE_CONFIG_DIRECTORY
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: CONCOURSE_CONFIG_FILENAME
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: sanitized
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
+        - name: DD_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: DD_LOGS_INJECTION
+          value: 'true'
+        - name: DD_PROFILING_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: concourse-auth-svc-configmap
+              key: sanitized
+        - name: DD_PROFILING_TIMELINE_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: concourse-auth-svc-configmap
+              key: sanitized
+        - name: DD_SERVICE
+          value: <{SERVICE_NAME}>
+        - name: DD_TAGS
+          value: app:concourse
+        - name: DD_TRACE_DEBUG
+          valueFrom:
+            configMapKeyRef:
+              name: concourse-auth-svc-configmap
+              key: sanitized
+        - name: DD_TRACE_PROPAGATION_STYLE
+          value: Datadog,tracecontext
+        - name: DD_TRACE_STARTUP_LOGS
+          valueFrom:
+            configMapKeyRef:
+              name: concourse-auth-svc-configmap
+              key: sanitized
+        - name: DD_VERSION
+          value: <{ver}>
+        - name: EVENTHUB_CONNECTION1
+          valueFrom:
+            secretKeyRef:
+              name: sanitized
+              key: sanitized
+        - name: EVENTHUB_CONNECTION2
+          valueFrom:
+            secretKeyRef:
+              name: sanitized
+              key: sanitized
+        - name: sanitized
+          valueFrom:
+            secretKeyRef:
+              name: sanitized
+              key: sanitized
+        - name: sanitized
+          valueFrom:
+            secretKeyRef:
+              name: sanitized
+              key: sanitized
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: concourse-auth-svc-configmap
+              key: sanitized
+        - name: PWC_ENV
+          value: <{ENVIRONMENT}>

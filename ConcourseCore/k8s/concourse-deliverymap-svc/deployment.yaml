@@ -1,0 +1,443 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: <{DEPLOYMENT_NAME}>
+  namespace: <{K8S_NAMESPACE_MESH}>
+spec:
+  replicas: <{REPLICAS}>
+  selector:
+    matchLabels:
+      tags.datadoghq.com/service: <{SERVICE_NAME}>
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 50%
+      maxUnavailable: 50%
+  template:
+    metadata:
+      labels:
+        tags.datadoghq.com/version: <{ver}>
+        tags.datadoghq.com/service: <{SERVICE_NAME}>
+        release: <{RELEASE_LABEL}>
+    spec:
+      dnsConfig:
+        options:
+        - name: ndots
+          value: '3'
+      imagePullSecrets:
+      - name: sanitized
+      volumes:
+      - name: config-yaml
+        configMap:
+          name: <{CONFIGMAP_YAML_NAME}>
+      - name: changelog
+        emptyDir: {}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: sanitized
+                operator: NotIn
+                values:
+                - system
+      initContainers:
+      - name: <{SERVICE_NAME}>-init
+        image: sanitized
+        imagePullPolicy: IfNotPresent
+        command:
+        - sh
+        - -c
+        - cp -r /app/db-changelog /changelog/
+        resources:
+          requests:
+            cpu: 50m
+            memory: 200Mi
+          limits:
+            cpu: '10'
+            memory: 3Gi
+        volumeMounts:
+        - name: changelog
+          mountPath: /changelog
+          readOnly: false
+      - name: liquibase-container
+        image: sanitized
+        imagePullPolicy: Always
+        command:
+        - sh
+        - -c
+        - sanitized
+        volumeMounts:
+        - name: changelog
+          mountPath: /liquibase/changelog
+          readOnly: false
+        resources:
+          requests:
+            cpu: 50m
+            memory: 200Mi
+          limits:
+            cpu: '10'
+            memory: 3Gi
+        env:
+        - name: MONGODB_PASS
+          valueFrom:
+            secretKeyRef:
+              name: sanitized
+              key: sanitized
+        - name: MONGODB_SCHEMA
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: sanitized
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: sanitized
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+      containers:
+      - name: <{SERVICE_NAME}>
+        image: sanitized
+        imagePullPolicy: IfNotPresent
+        resources:
+          requests:
+            cpu: 50m
+            memory: 600Mi
+          limits:
+            cpu: '5'
+            memory: 3Gi
+        ports:
+        - containerPort: 80
+        - containerPort: 5018
+        - containerPort: 5019
+        livenessProbe:
+          httpGet:
+            path: /v3/deliverymap/health/heartbeat
+            port: 5018
+          initialDelaySeconds: 180
+          periodSeconds: 10
+          failureThreshold: 3
+          successThreshold: 1
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /v3/deliverymap/health
+            port: 5018
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 2
+          successThreshold: 1
+          timeoutSeconds: 5
+        startupProbe:
+          httpGet:
+            path: /v3/deliverymap/health
+            port: 5018
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 3
+          successThreshold: 1
+          timeoutSeconds: 5
+        volumeMounts:
+        - name: config-yaml
+          mountPath: /configs-yaml
+          readOnly: true
+        env:
+        - name: NODE_OPTIONS
+          value: --max-old-space-size=3072
+        - name: RELEASE_LABEL
+          value: <{RELEASE_LABEL}>
+        - name: APP_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: sanitized
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: sanitized
+          valueFrom:
+            secretKeyRef:
+              name: sanitized
+              key: sanitized
+        - name: sanitized
+          valueFrom:
+            secretKeyRef:
+              name: sanitized
+              key: sanitized
+        - name: CONCOURSE_CONFIG_DIRECTORY
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: CONCOURSE_CONFIG_FILENAME
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: sanitized
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
+        - name: DD_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: DD_LOGS_INJECTION
+          value: 'true'
+        - name: DD_PROFILING_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: DD_PROFILING_TIMELINE_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: DD_SERVICE
+          value: <{SERVICE_NAME}>
+        - name: DD_TAGS
+          value: app:concourse
+        - name: DD_TRACE_DEBUG
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: DD_TRACE_PROPAGATION_STYLE
+          value: Datadog,tracecontext
+        - name: DD_TRACE_STARTUP_LOGS
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: DD_VERSION
+          value: <{ver}>
+        - name: sanitized
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: sanitized
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: FABRIC_PUBLISHING_EVENTHUB_CONNECTION_STRING_ADMIN
+          valueFrom:
+            secretKeyRef:
+              name: sanitized
+              key: sanitized
+        - name: FABRIC_PUBLISHING_EVENTHUB_CONNECTION_STRING_CORE
+          valueFrom:
+            secretKeyRef:
+              name: sanitized
+              key: sanitized
+        - name: FABRIC_PUBLISHING_EVENTHUB_NAME_ADMIN
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: FABRIC_PUBLISHING_EVENTHUB_NAME_CORE
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: FABRIC_PUBLISHING_EVENTHUB_TOPIC_ADMIN
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: FABRIC_PUBLISHING_EVENTHUB_TOPIC_CORE
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: FABRIC_PUBLISHING_MUTE_ADMIN
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: FABRIC_PUBLISHING_MUTE_CORE
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: sanitized
+          valueFrom:
+            secretKeyRef:
+              name: sanitized
+              key: sanitized
+        - name: sanitized
+          valueFrom:
+            secretKeyRef:
+              name: sanitized
+              key: sanitized
+        - name: sanitized
+          valueFrom:
+            secretKeyRef:
+              name: sanitized
+              key: sanitized
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: MONGODB_CERT
+          valueFrom:
+            secretKeyRef:
+              name: sanitized
+              key: sanitized
+        - name: MONGODB_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: MONGODB_PASS
+          valueFrom:
+            secretKeyRef:
+              name: sanitized
+              key: sanitized
+        - name: MONGODB_SCHEMA
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: sanitized
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: sanitized
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: MONGODB_MIN_POOL_SIZE
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: MONGODB_MAX_POOL_SIZE
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: MONGODB_MAX_CONNECTING
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: MONGODB_SOCKET_TIMEOUT_MS
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: sanitized
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: MONGODB_ENABLE_POOL_MONITOR
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: PWC_ENV
+          value: <{ENVIRONMENT}>
+        - name: sanitized
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: REDIS_CONNECTION_PASS
+          valueFrom:
+            secretKeyRef:
+              name: sanitized
+              key: sanitized
+        - name: REDIS_CONNECTION_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: REDIS_CONNECTION_TLS
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: REDIS_ENABLE
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: WORK_ITEM_CONFIGS_COLLECTION
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: WORK_PLAN_CONFIGS_COLLECTION
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: sanitized
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: sanitized
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: ENABLED_REPLICAS
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: ENABLE_SWAGGER
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: sanitized
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: sanitized
+          valueFrom:
+            secretKeyRef:
+              name: sanitized
+              key: sanitized
+        - name: BLOB_STORAGE_CONTAINER_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: BLOB_STORAGE_FOLDER_PATH
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: sanitized
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
+        - name: sanitized
+          valueFrom:
+            secretKeyRef:
+              name: sanitized
+              key: sanitized
+        - name: CACHE_MODULE_ENABLE
+          valueFrom:
+            configMapKeyRef:
+              name: <{CONFIGMAP_NAME}>
+              key: sanitized
