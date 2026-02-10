@@ -135,18 +135,16 @@ jobs:
         id: check-service
         run: |
           if [ ! -d "ConcourseCore/k8s/${{ matrix.service.name }}" ]; then
-            echo "Service folder ConcourseCore/k8s/${{ matrix.service.name }} does not exist - skipping"
-            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Service folder ConcourseCore/k8s/${{ matrix.service.name }} does not exist - skipping this service"
+            exit 1
           else
-            echo "Service folder exists - proceeding with deployment"
-            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "✅ Service folder exists - proceeding with deployment"
           fi
 
       # -----------------------------------------------------------------------
       # 2. Resolve config branches (replaces ADO "Validate & Set Branch Targets")
       # -----------------------------------------------------------------------
       - name: Resolve config branches
-        if: steps.check-service.outputs.skip != 'true'
         id: branches
         run: |
           CONFIG_BRANCH="${{ matrix.service.configBranch }}"
