@@ -374,6 +374,10 @@ jobs:
         run: |
           kubectl apply --dry-run=client -f "ConcourseCore/k8s/${{ matrix.service.name }}/deployment.yaml"
 
+      - name: Show env section of manifest
+        run: |
+          grep -A 100 "env:" "ConcourseCore/k8s/${{ matrix.service.name }}/deployment.yaml" | head -60
+
       # -----------------------------------------------------------------------
       # 16. Extract secret names from deployment manifest
       # -----------------------------------------------------------------------
