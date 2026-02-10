@@ -166,3 +166,21 @@ administration/scripts/python/utilities/    scripts/
 tech-enablement/config/                     (checked out at runtime from
   docker.k8.yml                              external repo — same as ADO)
 ```
+finding:
+In the Azure DevOps pipeline at monorepo-targeted-deploy-with-secrets.yaml:38-170:
+
+Read monorepo-targeted-deploy-with-secrets.yaml, lines 38 to 90
+
+Here it is! Lines 38-170 in the ADO pipeline show the service parameter with type: object containing all 19 services hardcoded as default: values.
+
+Then later in the pipeline (around line 210+), ADO uses a loop to iterate through them:
+
+Exactly! Line 235 shows: ${{ each service in parameters.service }}
+
+This is Azure DevOps' special syntax that loops through the object array. GitHub Actions doesn't have this feature, so we:
+
+Moved the service list from YAML → services.json
+Changed ${{ each service }} loop → strategy: matrix with fromJson()
+This gives the same result: one deployment job per service.
+
+workflow should be at root with .github\workflows only
