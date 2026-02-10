@@ -369,6 +369,10 @@ jobs:
       - name: Cat Deployment.yaml
         run: |
           cat "ConcourseCore/k8s/${{ matrix.service.name }}/deployment.yaml"
+      
+      - name: Validate deployment manifest
+        run: |
+          kubectl apply --dry-run=client -f "ConcourseCore/k8s/${{ matrix.service.name }}/deployment.yaml"
 
       # -----------------------------------------------------------------------
       # 16. Extract secret names from deployment manifest
