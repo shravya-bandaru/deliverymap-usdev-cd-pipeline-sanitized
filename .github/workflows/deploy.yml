@@ -392,6 +392,7 @@ jobs:
       # ---------------------------------------------------------------
       - name: Deploy Deployment
         run: |
+          kubectl delete deployment ${{ env.DEPLOYMENT_NAME }} -n ${{ env.MESH_K8S_NAMESPACE }} --ignore-not-found=true
           kubectl apply -f "ConcourseCore/k8s/${{ env.SERVICE_NAME }}/deployment.yaml" \
             -n ${{ env.MESH_K8S_NAMESPACE }}
           kubectl rollout status deployment/${{ env.DEPLOYMENT_NAME }} \
