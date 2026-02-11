@@ -21,6 +21,7 @@ spec:
         release: <{RELEASE_LABEL}>
     spec:
       imagePullSecrets: []
+      initContainers: []
       volumes:
       - name: config-yaml
         configMap:
