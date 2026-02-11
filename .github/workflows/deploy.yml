@@ -1,21 +1,15 @@
-# =============================================================================
-# GitHub Actions equivalent of:
-#   ConcourseCore/deploy/monorepo-targeted-deploy-with-secrets.yaml (Azure DevOps)
-#
-# Trigger: Manual (workflow_dispatch) — same as ADO "trigger: none"
-# Strategy: Matrix job iterating over services.json (replaces ADO ${{ each service }})
-# =============================================================================
+name: Deploy Microservice
 
-name: Deploy Concourse Microservices
+run-name: ${{ inputs.ENVIRONMENT }} - ${{ github.ref_name }}
 
 on:
   workflow_dispatch:
     inputs:
       ENVIRONMENT:
-        description: "Target environment"
+        description: 'Target environment'
         required: true
-        default: "us-dev"
         type: choice
+        default: us-dev
         options:
           - us-dev
           - us-qa
@@ -32,239 +26,231 @@ on:
           - apac-prod-dr
 
       ASB_QUEUE_SUFFIX:
-        description: "ASB Queue Suffix"
-        required: false
-        default: " "
+        description: 'ASB Queue Suffix'
+        required: true
         type: choice
+        default: ' '
         options:
-          - " "
-          - "-2"
+          - ' '
+          - '-2'
 
       EVENTHUB_CONSUMER_GROUP:
-        description: "EventHub Consumer Group"
-        required: false
-        default: "ConsumerGroup1"
+        description: 'EventHub Consumer Group'
+        required: true
         type: choice
+        default: ConsumerGroup1
         options:
           - ConsumerGroup1
           - ConsumerGroup2
 
       RELEASE_LABEL:
-        description: "Release label (for stage/prod canary deployments)"
+        description: 'Release label'
         required: false
-        default: ""
+        type: string
+        default: 'test'
 
       promoteFromDev:
-        description: "Promote build IDs from dev health endpoint"
+        description: 'Promote versions from Dev?'
         required: false
         type: boolean
         default: false
 
       RESTART_PODS:
-        description: "Rolling restart deployments after deploy"
+        description: 'Restart pods after deploy?'
         required: false
         type: boolean
         default: false
 
+# Global environment variables
+env:
+  MESH_K8S_NAMESPACE: co-mesh
+  K8S_NAMESPACE_MESH: co-mesh
+
 permissions:
-  id-token: write
+  id-token: write   # Required for Azure OIDC login
   contents: read
 
-# ---------------------------------------------------------------------------
-# Global environment variables (replaces ADO 'variables:' block)
-# ADO variable groups (ConcourseCore, $ENVIRONMENT) must be migrated to
-# GitHub Actions Environment secrets / variables or org-level secrets.
-# ---------------------------------------------------------------------------
-env:
-  ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
-  MESH_K8S_NAMESPACE: co-mesh
-  ASB_QUEUE_SUFFIX: ${{ inputs.ASB_QUEUE_SUFFIX }}
-  RELEASE_LABEL: ${{ inputs.RELEASE_LABEL || 'stable' }}
-  REPLICAS: "1"
-
 jobs:
-  # ===========================================================================
-  # Deploy each service (replaces ADO "${{ each service }}" loop)
-  # ===========================================================================
-  deploy-service:
+  deploy:
+    name: ${{ matrix.service.shortName }}
     runs-on: ubuntu-latest
-    continue-on-error: true  # Allow services without manifests to fail gracefully
+    environment: ${{ inputs.ENVIRONMENT }}
+
     strategy:
       fail-fast: false
-      max-parallel: 5
       matrix:
         service:
           - name: concourse-deliverymap-svc
             shortName: deliverymap
             contextPath: deliverymap
             buildId: 2.12.6-feature.1-add-missing-attr.1-2025-05-20.1394.1
-            concourseCoreConfigBranch: develop
+            concourseCoreConfigBranch: main
             techEnablementConfigBranch: main
-
-    # -------------------------------------------------------------------------
-    # Per-job environment — uses the GitHub Actions Environment matching the
-    # target region. Secrets like K8S_SERVICE_CONNECTION, AZURE_SERVICE_CONNECTION,
-    # AZ_KEY_VAULT, WAYDEV_API_HOST, WAYDEV_API_KEY must be stored there.
-    # -------------------------------------------------------------------------
-    environment: ${{ inputs.ENVIRONMENT }}
+          # Add more services here, e.g.:
+          # - name: concourse-engagement-svc
+          #   shortName: engagement
+          #   contextPath: engagement
+          #   buildId: 1.0.0
+          #   concourseCoreConfigBranch: main
+          #   techEnablementConfigBranch: main
 
     env:
       SERVICE_NAME: ${{ matrix.service.name }}
-      ver: ${{ matrix.service.buildId }}
+      SERVICE_SHORT_NAME: ${{ matrix.service.shortName }}
+      CONTEXT_PATH: ${{ matrix.service.contextPath }}
+      BUILD_ID: ${{ matrix.service.buildId }}
+      CONCOURSE_CORE_CONFIG_BRANCH: ${{ matrix.service.concourseCoreConfigBranch }}
+      TECH_ENABLEMENT_CONFIG_BRANCH: ${{ matrix.service.techEnablementConfigBranch }}
+      ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
+      ASB_QUEUE_SUFFIX: ${{ inputs.ASB_QUEUE_SUFFIX }}
+      RELEASE_LABEL: ${{ inputs.RELEASE_LABEL }}
+      REPLICAS: '1'
 
     steps:
-      # -----------------------------------------------------------------------
-      # 1. Checkout repository (all folders are in the same repo)
-      # -----------------------------------------------------------------------
-      - name: Checkout repository
+      # ---------------------------------------------------------------
+      # 1. Checkout
+      # ---------------------------------------------------------------
+      - name: Checkout Monorepo
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0          # full history so we can switch branches
+          persist-credentials: true
 
-      # -----------------------------------------------------------------------
-      # 1a. Check if service manifests exist (skip if not)
-      # -----------------------------------------------------------------------
-      - name: Check if service folder exists
-        id: check-service
+      # ---------------------------------------------------------------
+      # 2. Compute derived variables
+      # ---------------------------------------------------------------
+      - name: Set derived variables
         run: |
-          if [ ! -d "ConcourseCore/k8s/${{ matrix.service.name }}" ]; then
-            echo "::notice::Service folder ConcourseCore/k8s/${{ matrix.service.name }} does not exist - skipping this service"
-            exit 1
-          else
-            echo "✅ Service folder exists - proceeding with deployment"
-          fi
+          # K8S_SUFFIX = release label lowered with dots replaced by dashes
+          K8S_SUFFIX=$(echo "${{ inputs.RELEASE_LABEL }}" | tr '.' '-' | tr '[:upper:]' '[:lower:]')
+          echo "K8S_SUFFIX=${K8S_SUFFIX}" >> $GITHUB_ENV
 
-      # -----------------------------------------------------------------------
-      # 2. Resolve config branches (replaces ADO "Validate & Set Branch Targets")
-      # -----------------------------------------------------------------------
-      - name: Resolve config branches
-        id: branches
-        run: |
-          CONFIG_BRANCH="${{ matrix.service.configBranch }}"
-          TECH_BRANCH="${{ matrix.service.techEnablementConfigBranch }}"
-          CORE_BRANCH="${{ matrix.service.concourseCoreConfigBranch }}"
-
-          if [ -n "$CONFIG_BRANCH" ]; then
-            echo "techEnablementConfigBranch=$CONFIG_BRANCH" >> "$GITHUB_ENV"
-            echo "concourseCoreConfigBranch=$CONFIG_BRANCH"  >> "$GITHUB_ENV"
-          elif [ -n "$TECH_BRANCH" ] && [ -n "$CORE_BRANCH" ]; then
-            echo "techEnablementConfigBranch=$TECH_BRANCH" >> "$GITHUB_ENV"
-            echo "concourseCoreConfigBranch=$CORE_BRANCH"  >> "$GITHUB_ENV"
-          elif [ -n "$TECH_BRANCH" ]; then
-            echo "techEnablementConfigBranch=$TECH_BRANCH" >> "$GITHUB_ENV"
-            echo "concourseCoreConfigBranch=develop"        >> "$GITHUB_ENV"
-          elif [ -n "$CORE_BRANCH" ]; then
-            echo "techEnablementConfigBranch=main"          >> "$GITHUB_ENV"
-            echo "concourseCoreConfigBranch=$CORE_BRANCH"   >> "$GITHUB_ENV"
-          else
-            echo "::error::No config branch set for ${{ matrix.service.name }}"
-            exit 1
-          fi
-
-      # -----------------------------------------------------------------------
-      # 3. Switch ConcourseCore branch (kube config)
-      # -----------------------------------------------------------------------
-      - name: Switch ConcourseCore branch (if needed)
-        working-directory: ConcourseCore
-        run: |
-          git fetch --all
-          git checkout "${{ env.concourseCoreConfigBranch }}" || echo "Using current branch"
-
-      # -----------------------------------------------------------------------
-      # 4. Switch Tech-Enablement branch (if needed)
-      # -----------------------------------------------------------------------
-      - name: Switch Tech-Enablement branch (if needed)
-        working-directory: tech-enablement
-        run: |
-          git fetch --all
-          git switch "${{ env.techEnablementConfigBranch }}" || echo "Using current branch"
-
-      # -----------------------------------------------------------------------
-      # 5. Compute K8S naming variables (replaces ADO compile-time expressions)
-      # -----------------------------------------------------------------------
-      - name: Compute K8S naming variables
-        run: |
           ENV="${{ inputs.ENVIRONMENT }}"
-          RELEASE_LABEL="${{ inputs.RELEASE_LABEL }}"
-          K8S_SUFFIX=$(echo "$RELEASE_LABEL" | tr '[:upper:]' '[:lower:]' | tr '.' '-')
-          SVC="${{ matrix.service.name }}"
+          SVC="${{ env.SERVICE_NAME }}"
 
-          HIGHER_ENVS=("us-stage" "us-prod" "emea-stage" "emea-prod" "apac-stage" "apac-prod")
+          # Determine if this is a higher environment
+          HIGHER_ENVS="us-stage us-prod emea-stage emea-prod apac-stage apac-prod"
           IS_HIGHER=false
-          for e in "${HIGHER_ENVS[@]}"; do
-            [[ "$ENV" == "$e" ]] && IS_HIGHER=true
+          for e in $HIGHER_ENVS; do
+            if [ "$ENV" = "$e" ]; then IS_HIGHER=true; break; fi
           done
+          echo "IS_HIGHER_ENV=${IS_HIGHER}" >> $GITHUB_ENV
 
-          if [ "$IS_HIGHER" = true ] && [ -n "$K8S_SUFFIX" ]; then
-            echo "CONFIGMAP_NAME=${SVC}-${K8S_SUFFIX}-configmap"     >> "$GITHUB_ENV"
-            echo "DEPLOYMENT_NAME=${SVC}-${K8S_SUFFIX}"              >> "$GITHUB_ENV"
-            echo "SECRETMAP_NAME=${SVC}-${K8S_SUFFIX}-secretmap"     >> "$GITHUB_ENV"
-            echo "CONFIGMAP_YAML_NAME=${SVC}-${K8S_SUFFIX}-yaml"     >> "$GITHUB_ENV"
-            echo "SERVICE_HOST_SUFFIX=-${K8S_SUFFIX}"                >> "$GITHUB_ENV"
-            echo "K8S_RELEASE_LABEL=release: ${RELEASE_LABEL}"       >> "$GITHUB_ENV"
+          # EventHub Consumer Group
+          if [ "$IS_HIGHER" = "true" ]; then
+            echo "EVENTHUB_CONSUMER_GROUP=${{ inputs.EVENTHUB_CONSUMER_GROUP }}" >> $GITHUB_ENV
           else
-            echo "CONFIGMAP_NAME=${SVC}-configmap"       >> "$GITHUB_ENV"
-            echo "DEPLOYMENT_NAME=${SVC}"                >> "$GITHUB_ENV"
-            echo "SECRETMAP_NAME=${SVC}-secretmap"       >> "$GITHUB_ENV"
-            echo "CONFIGMAP_YAML_NAME=${SVC}-yaml"       >> "$GITHUB_ENV"
-            echo "SERVICE_HOST_SUFFIX= "                 >> "$GITHUB_ENV"
-            echo "K8S_RELEASE_LABEL= "                   >> "$GITHUB_ENV"
+            echo "EVENTHUB_CONSUMER_GROUP=\$Default" >> $GITHUB_ENV
           fi
 
-          echo "K8S_SUFFIX=$K8S_SUFFIX"                  >> "$GITHUB_ENV"
-          echo "K8S_NAMESPACE_MESH=co-mesh"              >> "$GITHUB_ENV"
+          # ver
+          echo "ver=${{ env.BUILD_ID }}" >> $GITHUB_ENV
 
-          # EventHub consumer group
-          if [ "$IS_HIGHER" = true ]; then
-            echo "EVENTHUB_CONSUMER_GROUP=${{ inputs.EVENTHUB_CONSUMER_GROUP }}" >> "$GITHUB_ENV"
+          # Conditional naming for higher envs
+          if [ "$IS_HIGHER" = "true" ]; then
+            echo "CONFIGMAP_NAME=${SVC}-${K8S_SUFFIX}-configmap" >> $GITHUB_ENV
+            echo "DEPLOYMENT_NAME=${SVC}-${K8S_SUFFIX}" >> $GITHUB_ENV
+            echo "SECRETMAP_NAME=${SVC}-${K8S_SUFFIX}-secretmap" >> $GITHUB_ENV
+            echo "CONFIGMAP_YAML_NAME=${SVC}-${K8S_SUFFIX}-yaml" >> $GITHUB_ENV
+            echo "SERVICE_HOST_SUFFIX=-${K8S_SUFFIX}" >> $GITHUB_ENV
+            echo "K8S_RELEASE_LABEL=release: ${{ inputs.RELEASE_LABEL }}" >> $GITHUB_ENV
           else
-            echo 'EVENTHUB_CONSUMER_GROUP=$Default' >> "$GITHUB_ENV"
+            echo "CONFIGMAP_NAME=${SVC}-configmap" >> $GITHUB_ENV
+            echo "DEPLOYMENT_NAME=${SVC}" >> $GITHUB_ENV
+            echo "SECRETMAP_NAME=${SVC}-secretmap" >> $GITHUB_ENV
+            echo "CONFIGMAP_YAML_NAME=${SVC}-yaml" >> $GITHUB_ENV
+            echo "SERVICE_HOST_SUFFIX= " >> $GITHUB_ENV
+            echo "K8S_RELEASE_LABEL= " >> $GITHUB_ENV
           fi
 
-      # -----------------------------------------------------------------------
-      # 6. Promote build ID from dev (optional)
-      # -----------------------------------------------------------------------
-      - name: Get versions from dev (promote)
+      # ---------------------------------------------------------------
+      # 3. Validate & Set Branch Targets
+      # ---------------------------------------------------------------
+      - name: Validate & Set Branch Targets
+        run: |
+          CONCOURSE_CORE="${{ env.CONCOURSE_CORE_CONFIG_BRANCH }}"
+          TECH_ENABLEMENT="${{ env.TECH_ENABLEMENT_CONFIG_BRANCH }}"
+
+          if [ -n "$CONCOURSE_CORE" ] && [ -n "$TECH_ENABLEMENT" ]; then
+            echo "concourseCoreConfigBranch=${CONCOURSE_CORE}" >> $GITHUB_ENV
+            echo "techEnablementConfigBranch=${TECH_ENABLEMENT}" >> $GITHUB_ENV
+          elif [ -n "$TECH_ENABLEMENT" ] && [ -z "$CONCOURSE_CORE" ]; then
+            echo "Defaulting concourseCoreConfigBranch to main"
+            echo "concourseCoreConfigBranch=main" >> $GITHUB_ENV
+            echo "techEnablementConfigBranch=${TECH_ENABLEMENT}" >> $GITHUB_ENV
+          elif [ -z "$TECH_ENABLEMENT" ] && [ -n "$CONCOURSE_CORE" ]; then
+            echo "Defaulting techEnablementConfigBranch to main"
+            echo "concourseCoreConfigBranch=${CONCOURSE_CORE}" >> $GITHUB_ENV
+            echo "techEnablementConfigBranch=main" >> $GITHUB_ENV
+          else
+            echo "::error::Both concourseCoreConfigBranch and techEnablementConfigBranch are missing"
+            exit 1
+          fi
+
+      # ---------------------------------------------------------------
+      # 4. Switch ConcourseCore Branch (kube config)
+      # ---------------------------------------------------------------
+      - name: Switch ConcourseCore Branch (kube config)
+        run: |
+          git config --global user.email "you@example.com"
+          git config --global user.name "GitHub Actions"
+          git fetch --all
+          git checkout -b "${{ env.concourseCoreConfigBranch }}" "origin/${{ env.concourseCoreConfigBranch }}" \
+            || git checkout "${{ env.concourseCoreConfigBranch }}"
+          git pull origin "${{ env.concourseCoreConfigBranch }}"
+
+      # ---------------------------------------------------------------
+      # 5. Switch Tech-Enablement Branch (for docker.k8.yml)
+      # ---------------------------------------------------------------
+      - name: Switch Tech-Enablement Branch (for docker.k8.yml)
+        run: |
+          git fetch --all
+          git switch "${{ env.techEnablementConfigBranch }}"
+
+      # ---------------------------------------------------------------
+      # 6. Get Versions From Dev (optional)
+      # ---------------------------------------------------------------
+      - name: Get Versions From Dev
         if: ${{ inputs.promoteFromDev == true }}
         run: |
-          BUILD_ID_RESPONSE=$(curl -s "https://concourse-api-qa.pwc.com/v3/${{ matrix.service.contextPath }}/health")
+          BUILD_ID_RESPONSE=$(curl -s https://concourse-api-qa.pwc.com/v3/${{ env.CONTEXT_PATH }}/health)
           BUILD_ID=$(echo "$BUILD_ID_RESPONSE" | jq -r '.metadata.appVersion' | sed 's/.202/-202/g')
-          echo "ver=${BUILD_ID}" >> "$GITHUB_ENV"
+          echo "BUILD_ID: ${BUILD_ID}"
+          echo "ver=${BUILD_ID}" >> $GITHUB_ENV
 
-      # -----------------------------------------------------------------------
-      # 7. Copy manifest templates
-      # -----------------------------------------------------------------------
-      - name: Copy manifest templates
+      # ---------------------------------------------------------------
+      # 7. Copy Manifest Templates
+      # ---------------------------------------------------------------
+      - name: Copy Manifest Templates
         run: |
           cp -v ConcourseCore/k8s/microservice-template/service.yaml \
-                ConcourseCore/k8s/${{ matrix.service.name }}/service.yaml
+                ConcourseCore/k8s/${{ env.SERVICE_NAME }}/service.yaml
 
-      # -----------------------------------------------------------------------
-      # 8. Update SERVICE_HOST for higher environments
-      # -----------------------------------------------------------------------
-      - name: Update SERVICE_HOST suffixes (higher envs only)
-        if: >-
-          contains(fromJson('["us-stage","us-prod","emea-stage","emea-prod","apac-stage","apac-prod"]'),
-          inputs.ENVIRONMENT)
+      # ---------------------------------------------------------------
+      # 8. Update SERVICE_HOST (higher envs only)
+      # ---------------------------------------------------------------
+      - name: Update SERVICE_HOST
+        if: ${{ env.IS_HIGHER_ENV == 'true' }}
         run: |
-          FILE_PATH="${{ github.workspace }}/tech-enablement/config/docker.k8.yml"
+          FILE_PATH=$GITHUB_WORKSPACE/tech-enablement/config/docker.k8.yml
+
           echo "Pre Replace"
-          grep SERVICE_HOST "$FILE_PATH" || true
+          grep SERVICE_HOST "$FILE_PATH"
 
           grep "SERVICE_HOST" "$FILE_PATH" | grep "svc" | grep -v auth-svc | while read -r line; do
             service_name=$(echo "$line" | sed -n 's/.*SERVICE_HOST: "\(.*-svc\)".*/\1/p')
             pattern="SERVICE_HOST: \"$service_name\""
-            replacement="SERVICE_HOST: \"$service_name-${{ env.K8S_SUFFIX }}\""
+            replacement="SERVICE_HOST: \"$service_name-${K8S_SUFFIX}\""
             sed -e "s/$pattern/$replacement/g" -i "$FILE_PATH"
           done
 
           echo -e "\nPost Replace"
-          grep SERVICE_HOST "$FILE_PATH" || true
+          grep SERVICE_HOST "$FILE_PATH"
 
-      # -----------------------------------------------------------------------
-      # 9. Set replicas to 2 for non-lower environments
-      # -----------------------------------------------------------------------
-      - name: Set replicas to 2 (higher environments)
+      # ---------------------------------------------------------------
+      # 9. Set Replicas to 2 (specific services in higher envs)
+      # ---------------------------------------------------------------
+      - name: Set Replicas to 2
         run: |
           SVC_REPLICAS=(
             "concourse-appintegrations-mgmt-svc"
@@ -290,40 +276,63 @@ jobs:
             "concourse-estimation-models-svc"
           )
           LOWER_ENVS=("us-dev" "us-qa" "us-int")
-          SVC_NAME="${{ matrix.service.name }}"
-          ENV="${{ inputs.ENVIRONMENT }}"
-
-          IS_LOWER=false
-          for e in "${LOWER_ENVS[@]}"; do [[ "$ENV" == "$e" ]] && IS_LOWER=true; done
-
-          if [[ " ${SVC_REPLICAS[*]} " =~ " ${SVC_NAME} " ]] && [ "$IS_LOWER" = false ]; then
-            echo "REPLICAS=2" >> "$GITHUB_ENV"
-            echo "Setting REPLICAS=2"
+          if [[ "${SVC_REPLICAS[*]}" =~ "${{ env.SERVICE_NAME }}" ]] && ! [[ "${LOWER_ENVS[*]}" =~ "${{ inputs.ENVIRONMENT }}" ]]; then
+            echo "REPLICAS=2" >> $GITHUB_ENV
+            echo "REPLICAS set to 2"
           else
-            echo "Using default REPLICAS=1"
+            echo "Skip - using default replicas"
           fi
 
-      # -----------------------------------------------------------------------
-      # 10. Replace tokens in K8s manifests (replaces ADO replacetokens@6 task)
-      # -----------------------------------------------------------------------
-      - name: Replace <{VARIABLE}> tokens in manifests
+      # ---------------------------------------------------------------
+      # 10. Replace Tokens
+      # ---------------------------------------------------------------
+      - name: Replace Tokens
+        env:
+          ver: ${{ env.ver }}
+          DEPLOYMENT_NAME: ${{ env.DEPLOYMENT_NAME }}
+          K8S_NAMESPACE_MESH: ${{ env.K8S_NAMESPACE_MESH }}
+          REPLICAS: ${{ env.REPLICAS }}
+          SERVICE_NAME: ${{ env.SERVICE_NAME }}
+          CONFIGMAP_NAME: ${{ env.CONFIGMAP_NAME }}
+          CONFIGMAP_YAML_NAME: ${{ env.CONFIGMAP_YAML_NAME }}
+          RELEASE_LABEL: ${{ env.RELEASE_LABEL }}
+          SERVICE_HOST_SUFFIX: ${{ env.SERVICE_HOST_SUFFIX }}
+          K8S_RELEASE_LABEL: ${{ env.K8S_RELEASE_LABEL }}
+          SECRETMAP_NAME: ${{ env.SECRETMAP_NAME }}
         run: |
-          python3 administration/scripts/python/replace-tokens.py \
-            "ConcourseCore/k8s/${{ matrix.service.name }}/service.yaml" \
-            "${{ github.workspace }}/tech-enablement/config/docker.k8.yml" \
-            "ConcourseCore/k8s/${{ matrix.service.name }}/deployment.yaml" \
-            "ConcourseCore/k8s/${{ matrix.service.name }}/hpa.yaml" \
-            "ConcourseCore/k8s/${{ matrix.service.name }}/configs/${{ inputs.ENVIRONMENT }}/${{ matrix.service.name }}.configmap.yaml"
+          TARGET_FILES=(
+            "ConcourseCore/k8s/${{ env.SERVICE_NAME }}/service.yaml"
+            "$GITHUB_WORKSPACE/tech-enablement/config/docker.k8.yml"
+            "ConcourseCore/k8s/${{ env.SERVICE_NAME }}/deployment.yaml"
+            "ConcourseCore/k8s/${{ env.SERVICE_NAME }}/hpa.yaml"
+            "ConcourseCore/k8s/${{ env.SERVICE_NAME }}/configs/${{ inputs.ENVIRONMENT }}/${{ env.SERVICE_NAME }}.configmap.yaml"
+          )
+          for file in "${TARGET_FILES[@]}"; do
+            if [ -f "$file" ]; then
+              echo "Processing: $file"
+              tokens=$(grep -oP '<\{[^}]+\}>' "$file" | sort -u | sed 's/<{//;s/}>//')
+              for token in $tokens; do
+                value="${!token}"
+                if [ -n "$value" ]; then
+                  sed -i "s|<{${token}}>|${value}|g" "$file"
+                else
+                  echo "WARNING: No value for token: $token, using defaultValue"
+                  sed -i "s|<{${token}}>|defaultValue|g" "$file"
+                fi
+              done
+            else
+              echo "File not found, skipping: $file"
+            fi
+          done
 
-      # -----------------------------------------------------------------------
-      # 11. Build YAML ConfigMap (append docker.k8.yml into configmap)
-      # -----------------------------------------------------------------------
-      - name: Create YAML ConfigMap
+      # ---------------------------------------------------------------
+      # 11. Create YAML Config (append docker.k8.yml into configmap)
+      # ---------------------------------------------------------------
+      - name: Create YAML Config
         run: |
-          TARGET_FILE="ConcourseCore/k8s/${{ matrix.service.name }}/configs/${{ inputs.ENVIRONMENT }}/${{ matrix.service.name }}.configmap.yaml"
+          CONFIGMAP_FILE="ConcourseCore/k8s/${{ env.SERVICE_NAME }}/configs/${{ inputs.ENVIRONMENT }}/${{ env.SERVICE_NAME }}.configmap.yaml"
 
-          cat >> "$TARGET_FILE" <<EOF
-
+          echo "
           ---
 
           apiVersion: v1
@@ -333,13 +342,13 @@ jobs:
             namespace: ${{ env.MESH_K8S_NAMESPACE }}
           data:
             config.yaml: |
-          EOF
+          " >> "$CONFIGMAP_FILE"
 
-          cat "${{ github.workspace }}/tech-enablement/config/docker.k8.yml" | sed -e 's/^/    /' >> "$TARGET_FILE"
+          cat $GITHUB_WORKSPACE/tech-enablement/config/docker.k8.yml | sed -e 's/^/    /' >> "$CONFIGMAP_FILE"
 
-      # -----------------------------------------------------------------------
-      # 12. Azure Login (replaces ADO Azure service connection)
-      # -----------------------------------------------------------------------
+      # ---------------------------------------------------------------
+      # 12. Azure Login (OIDC - configure federated credential in Azure AD)
+      # ---------------------------------------------------------------
       - name: Azure Login
         uses: azure/login@v2
         with:
@@ -347,174 +356,64 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # -----------------------------------------------------------------------
-      # 13. Set AKS context (replaces ADO K8S_SERVICE_CONNECTION)
-      # -----------------------------------------------------------------------
-      - name: Set AKS context
+      # ---------------------------------------------------------------
+      # 13. Set AKS Context
+      # ---------------------------------------------------------------
+      - name: Set AKS Context
         uses: azure/aks-set-context@v4
         with:
-          cluster-name: ${{ secrets.AKS_CLUSTER_NAME }}
           resource-group: ${{ secrets.AKS_RESOURCE_GROUP }}
+          cluster-name: ${{ secrets.AKS_CLUSTER_NAME }}
 
-      # -----------------------------------------------------------------------
-      # 14. Deploy ConfigMap to AKS
-      # -----------------------------------------------------------------------
+      # ---------------------------------------------------------------
+      # 14. Deploy ConfigMap
+      # ---------------------------------------------------------------
       - name: Deploy ConfigMap
         run: |
-          kubectl apply -f "ConcourseCore/k8s/${{ matrix.service.name }}/configs/${{ inputs.ENVIRONMENT }}/${{ matrix.service.name }}.configmap.yaml"
+          kubectl apply -f "ConcourseCore/k8s/${{ env.SERVICE_NAME }}/configs/${{ inputs.ENVIRONMENT }}/${{ env.SERVICE_NAME }}.configmap.yaml" \
+            -n ${{ env.MESH_K8S_NAMESPACE }}
 
-      # -----------------------------------------------------------------------
-      # 15. Debug — cat the deployment manifest
-      # -----------------------------------------------------------------------
+      # ---------------------------------------------------------------
+      # 15. Cat Deployment.yaml (debug)
+      # ---------------------------------------------------------------
       - name: Cat Deployment.yaml
         run: |
-          cat "ConcourseCore/k8s/${{ matrix.service.name }}/deployment.yaml"
-      
-      - name: Validate deployment manifest
-        run: |
-          kubectl apply --dry-run=client -f "ConcourseCore/k8s/${{ matrix.service.name }}/deployment.yaml"
+          cat "ConcourseCore/k8s/${{ env.SERVICE_NAME }}/deployment.yaml"
 
-      - name: Show env section of manifest
-        run: |
-          grep -A 100 "env:" "ConcourseCore/k8s/${{ matrix.service.name }}/deployment.yaml" | head -60
-
-      # -----------------------------------------------------------------------
-      # 16. Extract secret names from deployment manifest
-      # -----------------------------------------------------------------------
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-
-      - name: Install Python dependencies
-        run: pip install -r administration/scripts/python/utilities/requirements.txt
-
-      - name: Get secret names from deployment manifest
-        id: get-secrets
-        run: |
-          cd administration/scripts/python/utilities
-          OUTPUT=$(python3 get-secrets-from-yaml.py \
-            --service-name "${{ env.SERVICE_NAME }}" \
-            --manifest "${{ github.workspace }}/ConcourseCore/k8s/${{ matrix.service.name }}/deployment.yaml")
-          echo "$OUTPUT" >> $GITHUB_OUTPUT
-
-      - name: Validate secret names
-        run: echo "APP_SECRETS=${{ steps.get-secrets.outputs.APP_SECRETS }}"
-
-      # -----------------------------------------------------------------------
-      # 17. Fetch secrets from Azure Key Vault (replaces ADO AzureCLI@2 task)
-      # -----------------------------------------------------------------------
-      - name: Fetch secrets from Azure Key Vault
-        continue-on-error: true
-        run: |
-          IFS=',' read -ra SECRETS <<< "${{ steps.get-secrets.outputs.APP_SECRETS }}"
-          mkdir -p "${{ github.workspace }}/envs"
-
-          for secret in "${SECRETS[@]}"; do
-            secretValue=$(az keyvault secret show \
-              --vault-name "${{ secrets.AZ_KEY_VAULT }}" \
-              --name "$secret" \
-              --query value -o tsv)
-
-            # Convert PascalCase to snake_case
-            snake_case=$(echo "$secret" | sed -r 's/([A-Z])/_\L\1/g' | sed -r 's/^_//')
-            secretPath="${{ github.workspace }}/envs/$snake_case"
-            rm -f "$secretPath"
-            echo -n "$secretValue" > "$secretPath"
-          done
-
-      # -----------------------------------------------------------------------
-      # 18. Bake Kustomize secret manifest (replaces ADO KubernetesManifest bake)
-      # -----------------------------------------------------------------------
-      - name: Create kustomization.yaml
-        continue-on-error: true
-        run: |
-          bash administration/scripts/bash/bake-secretmap.sh \
-            -s "${{ env.SECRETMAP_NAME }}" \
-            -p "${{ github.workspace }}/envs" \
-            > "${{ github.workspace }}/kustomization.yaml"
-
-          cat "${{ github.workspace }}/kustomization.yaml"
-
-      - name: Bake secrets with Kustomize
-        continue-on-error: true
-        run: |
-          kubectl kustomize "${{ github.workspace }}/" \
-            > "${{ github.workspace }}/concourse-api-secrets.yaml"
-          chmod 600 "${{ github.workspace }}/concourse-api-secrets.yaml"
-
-      # -----------------------------------------------------------------------
-      # 19. Deploy Secrets to AKS
-      # -----------------------------------------------------------------------
-      - name: Deploy Secrets
-        continue-on-error: true
-        run: |
-          kubectl apply -f "${{ github.workspace }}/concourse-api-secrets.yaml" \
-            -n "${{ env.MESH_K8S_NAMESPACE }}"
-
-      # -----------------------------------------------------------------------
-      # 20. Deploy Deployment manifest to AKS
-      # -----------------------------------------------------------------------
+      # ---------------------------------------------------------------
+      # 16. Deploy Deployment
+      # ---------------------------------------------------------------
       - name: Deploy Deployment
         run: |
-          kubectl apply -f "ConcourseCore/k8s/${{ matrix.service.name }}/deployment.yaml" \
-            -n "${{ env.MESH_K8S_NAMESPACE }}"
+          kubectl apply -f "ConcourseCore/k8s/${{ env.SERVICE_NAME }}/deployment.yaml" \
+            -n ${{ env.MESH_K8S_NAMESPACE }}
+          kubectl rollout status deployment/${{ env.DEPLOYMENT_NAME }} \
+            -n ${{ env.MESH_K8S_NAMESPACE }} --timeout=600s
 
-      # -----------------------------------------------------------------------
-      # 21. Deploy Service manifest to AKS
-      # -----------------------------------------------------------------------
+      # ---------------------------------------------------------------
+      # 17. Deploy Service
+      # ---------------------------------------------------------------
       - name: Deploy Service
         run: |
-          kubectl apply -f "ConcourseCore/k8s/${{ matrix.service.name }}/service.yaml" \
-            -n "${{ env.MESH_K8S_NAMESPACE }}"
+          kubectl apply -f "ConcourseCore/k8s/${{ env.SERVICE_NAME }}/service.yaml" \
+            -n ${{ env.MESH_K8S_NAMESPACE }}
 
-      # -----------------------------------------------------------------------
-      # 22. Deploy HPA (only for higher envs + specific services)
-      # -----------------------------------------------------------------------
+      # ---------------------------------------------------------------
+      # 18. Deploy HPA (higher envs + specific services only)
+      # ---------------------------------------------------------------
       - name: Deploy HPA
-        if: >-
-          contains(fromJson('["us-perf","us-stage","us-prod","emea-stage","emea-prod","apac-stage","apac-prod"]'),
-          inputs.ENVIRONMENT) &&
-          contains(fromJson('["concourse-integration-ai-svc","concourse-deliverymap-svc","concourse-engagement-svc","concourse-user-profile-svc","concourse-chat-svc"]'),
-          matrix.service.name)
+        if: |
+          contains(fromJSON('["us-perf","us-stage","us-prod","emea-stage","emea-prod","apac-stage","apac-prod"]'), inputs.ENVIRONMENT) &&
+          contains(fromJSON('["concourse-integration-ai-svc","concourse-deliverymap-svc","concourse-engagement-svc","concourse-user-profile-svc","concourse-chat-svc"]'), env.SERVICE_NAME)
         run: |
-          kubectl apply -f "ConcourseCore/k8s/${{ matrix.service.name }}/hpa.yaml" \
-            -n "${{ env.MESH_K8S_NAMESPACE }}"
+          kubectl apply -f "ConcourseCore/k8s/${{ env.SERVICE_NAME }}/hpa.yaml" \
+            -n ${{ env.MESH_K8S_NAMESPACE }}
 
-      # -----------------------------------------------------------------------
-      # 23. Rolling restart (optional)
-      # -----------------------------------------------------------------------
-      - name: Rolling restart deployment
+      # ---------------------------------------------------------------
+      # 19. Rolling Restart (optional)
+      # ---------------------------------------------------------------
+      - name: Rolling Restart
         if: ${{ inputs.RESTART_PODS == true }}
         run: |
-          kubectl rollout restart deployment "${{ env.DEPLOYMENT_NAME }}" \
-            -n "${{ env.MESH_K8S_NAMESPACE }}"
-
-      # -----------------------------------------------------------------------
-      # 24. Push WayDev deployment metadata (always runs)
-      # -----------------------------------------------------------------------
-      - name: Push WayDev metadata
-        if: always()
-        continue-on-error: true
-        run: |
-          dateTimeNow=$(date "+%Y-%m-%d %H:%M:%S")
-          data=$(cat <<EOF
-          {
-            "name": "${{ matrix.service.name }}",
-            "repository_url": "https://github.com/pwc-us-adv-digital/${{ matrix.service.name }}",
-            "ref": "${{ github.ref_name }}",
-            "start_date": "$dateTimeNow",
-            "finished_date": "$dateTimeNow",
-            "env": "${{ inputs.ENVIRONMENT }}",
-            "result": "${{ job.status }}",
-            "state": "finished",
-            "number": "${{ github.run_id }}"
-          }
-          EOF
-          )
-          echo "$data"
-          curl -s -X POST '${{ secrets.WAYDEV_API_HOST }}deployments' \
-            --header 'Accept: application/json' \
-            --header 'Content-Type: application/json' \
-            --header 'Authorization: ${{ secrets.WAYDEV_API_KEY }}' \
-            --data "$data"
+          kubectl rollout restart deployment/${{ env.DEPLOYMENT_NAME }} \
+            -n ${{ env.MESH_K8S_NAMESPACE }}
