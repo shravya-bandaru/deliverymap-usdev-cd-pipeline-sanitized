@@ -72,8 +72,8 @@ env:
   RELEASE_LABEL: ${{ inputs.RELEASE_LABEL || 'stable' }}
   RESTART_PODS: ${{ inputs.RESTART_PODS || false }}
   PROMOTE_FROM_DEV: ${{ inputs.promoteFromDev || false }}
-  MESH_K8S_NAMESPACE: co-mesh
-  K8S_NAMESPACE_MESH: co-mesh
+  MESH_K8S_NAMESPACE: co-mesh-test
+  K8S_NAMESPACE_MESH: co-mesh-test
 
 permissions:
   id-token: write   # Required for Azure OIDC login

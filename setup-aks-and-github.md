@@ -94,13 +94,13 @@
 az aks get-credentials --resource-group concourse-rg-usdev --name concourse-aks-usdev
 
 # Create namespace
-kubectl create namespace co-mesh
+kubectl create namespace co-mesh-test
 
 # Verify
 kubectl get namespaces
 ```
 
-You should see `co-mesh` in the list.
+You should see `co-mesh-test` in the list.
 
 ## Step 5: Create Azure Key Vault
 
@@ -394,7 +394,7 @@ Print or save this checklist:
 - [ ] GitHub PAT (for both PAT secrets): __________________
 - [ ] All secrets added to GitHub repository ✓
 - [ ] AKS cluster running ✓
-- [ ] Namespace `co-mesh` created ✓
+- [ ] Namespace `co-mesh-test` created ✓
 
 
 
