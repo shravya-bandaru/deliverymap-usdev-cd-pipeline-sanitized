@@ -3,6 +3,9 @@ name: Deploy Microservice
 run-name: ${{ inputs.ENVIRONMENT }} - ${{ github.ref_name }}
 
 on:
+  push:
+    branches:
+      - changestogithubworkflow
   workflow_dispatch:
     inputs:
       ENVIRONMENT:
@@ -63,6 +66,12 @@ on:
 
 # Global environment variables
 env:
+  ENVIRONMENT: ${{ inputs.ENVIRONMENT || 'us-dev' }}
+  ASB_QUEUE_SUFFIX: ${{ inputs.ASB_QUEUE_SUFFIX || ' ' }}
+  EVENTHUB_CONSUMER_GROUP: ${{ inputs.EVENTHUB_CONSUMER_GROUP || 'ConsumerGroup1' }}
+  RELEASE_LABEL: ${{ inputs.RELEASE_LABEL || 'stable' }}
+  RESTART_PODS: ${{ inputs.RESTART_PODS || false }}
+  PROMOTE_FROM_DEV: ${{ inputs.promoteFromDev || false }}
   MESH_K8S_NAMESPACE: co-mesh
   K8S_NAMESPACE_MESH: co-mesh
 
