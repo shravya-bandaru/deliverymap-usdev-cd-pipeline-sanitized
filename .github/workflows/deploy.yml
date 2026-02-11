@@ -3,6 +3,9 @@ name: Deploy Microservice
 run-name: ${{ inputs.ENVIRONMENT }} - ${{ github.ref_name }}
 
 on:
+  push:
+    branches:
+      - changestogithubworkflow
   workflow_dispatch:
     inputs:
       ENVIRONMENT:
