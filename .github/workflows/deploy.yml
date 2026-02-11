@@ -69,7 +69,7 @@ env:
   ENVIRONMENT: ${{ inputs.ENVIRONMENT || 'us-dev' }}
   ASB_QUEUE_SUFFIX: ${{ inputs.ASB_QUEUE_SUFFIX || ' ' }}
   EVENTHUB_CONSUMER_GROUP: ${{ inputs.EVENTHUB_CONSUMER_GROUP || 'ConsumerGroup1' }}
-  RELEASE_LABEL: ${{ inputs.RELEASE_LABEL || 'stable' }}
+  RELEASE_LABEL: ${{ inputs.RELEASE_LABEL || 'test' }}
   RESTART_PODS: ${{ inputs.RESTART_PODS || false }}
   PROMOTE_FROM_DEV: ${{ inputs.promoteFromDev || false }}
   MESH_K8S_NAMESPACE: co-mesh-test
@@ -110,9 +110,6 @@ jobs:
       BUILD_ID: ${{ matrix.service.buildId }}
       CONCOURSE_CORE_CONFIG_BRANCH: ${{ matrix.service.concourseCoreConfigBranch }}
       TECH_ENABLEMENT_CONFIG_BRANCH: ${{ matrix.service.techEnablementConfigBranch }}
-      ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
-      ASB_QUEUE_SUFFIX: ${{ inputs.ASB_QUEUE_SUFFIX }}
-      RELEASE_LABEL: ${{ inputs.RELEASE_LABEL }}
       REPLICAS: '1'
 
     steps:
@@ -177,10 +174,15 @@ jobs:
       # ---------------------------------------------------------------
       - name: Validate & Set Branch Targets
         run: |
+          CONFIG_BRANCH="${{ matrix.service.configBranch }}"
           CONCOURSE_CORE="${{ env.CONCOURSE_CORE_CONFIG_BRANCH }}"
           TECH_ENABLEMENT="${{ env.TECH_ENABLEMENT_CONFIG_BRANCH }}"
 
-          if [ -n "$CONCOURSE_CORE" ] && [ -n "$TECH_ENABLEMENT" ]; then
+          # If configBranch is set, use it for both
+          if [ -n "$CONFIG_BRANCH" ]; then
+            echo "concourseCoreConfigBranch=${CONFIG_BRANCH}" >> $GITHUB_ENV
+            echo "techEnablementConfigBranch=${CONFIG_BRANCH}" >> $GITHUB_ENV
+          elif [ -n "$CONCOURSE_CORE" ] && [ -n "$TECH_ENABLEMENT" ]; then
             echo "concourseCoreConfigBranch=${CONCOURSE_CORE}" >> $GITHUB_ENV
             echo "techEnablementConfigBranch=${TECH_ENABLEMENT}" >> $GITHUB_ENV
           elif [ -n "$TECH_ENABLEMENT" ] && [ -z "$CONCOURSE_CORE" ]; then
@@ -356,7 +358,7 @@ jobs:
           cat $GITHUB_WORKSPACE/tech-enablement/config/docker.k8.yml | sed -e 's/^/    /' >> "$CONFIGMAP_FILE"
 
       # ---------------------------------------------------------------
-      # 12. Azure Login (Client Secret)
+      # 12. Azure Login (OIDC)
       # ---------------------------------------------------------------
       - name: Azure Login
         uses: azure/login@v2
@@ -392,7 +394,6 @@ jobs:
       # ---------------------------------------------------------------
       - name: Deploy Deployment
         run: |
-          kubectl delete deployment ${{ env.DEPLOYMENT_NAME }} -n ${{ env.MESH_K8S_NAMESPACE }} --ignore-not-found=true
           kubectl apply -f "ConcourseCore/k8s/${{ env.SERVICE_NAME }}/deployment.yaml" \
             -n ${{ env.MESH_K8S_NAMESPACE }}
           kubectl rollout status deployment/${{ env.DEPLOYMENT_NAME }} \
