@@ -26,6 +26,8 @@
 4. Click **Review + create**
 5. Click **Create**
 
+
+
 **Save these values:**
 - Resource Group Name: `concourse-rg-usdev`
 - Region: `East US` (or whatever you chose)
