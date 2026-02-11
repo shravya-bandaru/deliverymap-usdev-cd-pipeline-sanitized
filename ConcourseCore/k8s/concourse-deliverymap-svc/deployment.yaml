@@ -20,6 +20,7 @@ spec:
         tags.datadoghq.com/service: <{SERVICE_NAME}>
         release: <{RELEASE_LABEL}>
     spec:
+      imagePullSecrets: []
       volumes:
       - name: config-yaml
         configMap:
