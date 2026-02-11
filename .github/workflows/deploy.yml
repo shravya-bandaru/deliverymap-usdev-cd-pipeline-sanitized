@@ -3,9 +3,6 @@ name: Deploy Microservice
 run-name: ${{ inputs.ENVIRONMENT }} - ${{ github.ref_name }}
 
 on:
-  push:
-    branches:
-      - changestogithubworkflow
   workflow_dispatch:
     inputs:
       ENVIRONMENT:
@@ -72,8 +69,8 @@ env:
   RELEASE_LABEL: ${{ inputs.RELEASE_LABEL || 'test' }}
   RESTART_PODS: ${{ inputs.RESTART_PODS || false }}
   PROMOTE_FROM_DEV: ${{ inputs.promoteFromDev || false }}
-  MESH_K8S_NAMESPACE: co-mesh-test
-  K8S_NAMESPACE_MESH: co-mesh-test
+  MESH_K8S_NAMESPACE: co-mesh
+  K8S_NAMESPACE_MESH: co-mesh
 
 permissions:
   id-token: write   # Required for Azure OIDC login
