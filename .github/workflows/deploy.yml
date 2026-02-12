@@ -44,412 +44,174 @@ on:
         type: boolean
         default: false
 
-# Global environment variables
-env:
-  ASB_QUEUE_SUFFIX: ${{ inputs.ASB_QUEUE_SUFFIX || ' ' }}
-  EVENTHUB_CONSUMER_GROUP: ${{ inputs.EVENTHUB_CONSUMER_GROUP || 'ConsumerGroup1' }}
-  RELEASE_LABEL: ${{ inputs.RELEASE_LABEL || 'stable' }}
-  RESTART_PODS: ${{ inputs.RESTART_PODS || false }}
-  PROMOTE_FROM_DEV: ${{ inputs.promoteFromDev || false }}
-  MESH_K8S_NAMESPACE: co-mesh-test
-  K8S_NAMESPACE_MESH: co-mesh-test
-
 permissions:
   contents: read
 
 jobs:
-  deploy:
-    name: ${{ matrix.environment }} / ${{ matrix.service.shortName }}
-    runs-on: ubuntu-latest
+  us-dev:
+    name: us-dev
+    uses: ./.github/workflows/deploy-env.yml
+    with:
+      environment: us-dev
+      ASB_QUEUE_SUFFIX: ${{ inputs.ASB_QUEUE_SUFFIX || ' ' }}
+      EVENTHUB_CONSUMER_GROUP: ${{ inputs.EVENTHUB_CONSUMER_GROUP || 'ConsumerGroup1' }}
+      RELEASE_LABEL: ${{ inputs.RELEASE_LABEL || 'stable' }}
+      promoteFromDev: ${{ inputs.promoteFromDev || false }}
+      RESTART_PODS: ${{ inputs.RESTART_PODS || false }}
+    secrets: inherit
 
-    strategy:
-      fail-fast: false
-      max-parallel: 1
-      matrix:
-        environment:
-          - us-dev
-          - us-qa
-          - us-perf
-          - us-int
-          - us-stage
-          - us-prod
-          - us-prod-dr
-          - emea-stage
-          - emea-prod
-          - emea-prod-dr
-          - apac-stage
-          - apac-prod
-          - apac-prod-dr
-        service:
-          - name: concourse-deliverymap-svc
-            shortName: deliverymap
-            contextPath: deliverymap
-            buildId: 2.12.6-feature.1-add-missing-attr.1-2025-05-20.1394.1
-            concourseCoreConfigBranch: main
-            techEnablementConfigBranch: main
-          # Add more services here, e.g.:
-          # - name: concourse-engagement-svc
-          #   shortName: engagement
-          #   contextPath: engagement
-          #   buildId: 1.0.0
-          #   concourseCoreConfigBranch: main
-          #   techEnablementConfigBranch: main
+  us-qa:
+    name: us-qa
+    needs: us-dev
+    uses: ./.github/workflows/deploy-env.yml
+    with:
+      environment: us-qa
+      ASB_QUEUE_SUFFIX: ${{ inputs.ASB_QUEUE_SUFFIX || ' ' }}
+      EVENTHUB_CONSUMER_GROUP: ${{ inputs.EVENTHUB_CONSUMER_GROUP || 'ConsumerGroup1' }}
+      RELEASE_LABEL: ${{ inputs.RELEASE_LABEL || 'stable' }}
+      promoteFromDev: ${{ inputs.promoteFromDev || false }}
+      RESTART_PODS: ${{ inputs.RESTART_PODS || false }}
+    secrets: inherit
 
-    env:
-      SERVICE_NAME: ${{ matrix.service.name }}
-      SERVICE_SHORT_NAME: ${{ matrix.service.shortName }}
-      CONTEXT_PATH: ${{ matrix.service.contextPath }}
-      BUILD_ID: ${{ matrix.service.buildId }}
-      CONCOURSE_CORE_CONFIG_BRANCH: ${{ matrix.service.concourseCoreConfigBranch }}
-      TECH_ENABLEMENT_CONFIG_BRANCH: ${{ matrix.service.techEnablementConfigBranch }}
-      ENVIRONMENT: ${{ matrix.environment }}
-      REPLICAS: '1'
+  us-perf:
+    name: us-perf
+    needs: us-qa
+    uses: ./.github/workflows/deploy-env.yml
+    with:
+      environment: us-perf
+      ASB_QUEUE_SUFFIX: ${{ inputs.ASB_QUEUE_SUFFIX || ' ' }}
+      EVENTHUB_CONSUMER_GROUP: ${{ inputs.EVENTHUB_CONSUMER_GROUP || 'ConsumerGroup1' }}
+      RELEASE_LABEL: ${{ inputs.RELEASE_LABEL || 'stable' }}
+      promoteFromDev: ${{ inputs.promoteFromDev || false }}
+      RESTART_PODS: ${{ inputs.RESTART_PODS || false }}
+    secrets: inherit
 
-    steps:
-      # ---------------------------------------------------------------
-      # 1. Checkout
-      # ---------------------------------------------------------------
-      - name: Checkout Monorepo
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0          # full history so we can switch branches
-          persist-credentials: true
+  us-int:
+    name: us-int
+    needs: us-perf
+    uses: ./.github/workflows/deploy-env.yml
+    with:
+      environment: us-int
+      ASB_QUEUE_SUFFIX: ${{ inputs.ASB_QUEUE_SUFFIX || ' ' }}
+      EVENTHUB_CONSUMER_GROUP: ${{ inputs.EVENTHUB_CONSUMER_GROUP || 'ConsumerGroup1' }}
+      RELEASE_LABEL: ${{ inputs.RELEASE_LABEL || 'stable' }}
+      promoteFromDev: ${{ inputs.promoteFromDev || false }}
+      RESTART_PODS: ${{ inputs.RESTART_PODS || false }}
+    secrets: inherit
 
-      # ---------------------------------------------------------------
-      # 2. Compute derived variables
-      # ---------------------------------------------------------------
-      - name: Set derived variables
-        run: |
-          # K8S_SUFFIX = release label lowered with dots replaced by dashes
-          K8S_SUFFIX=$(echo "${{ env.RELEASE_LABEL }}" | tr '.' '-' | tr '[:upper:]' '[:lower:]')
-          echo "K8S_SUFFIX=${K8S_SUFFIX}" >> $GITHUB_ENV
+  us-stage:
+    name: us-stage
+    needs: us-int
+    uses: ./.github/workflows/deploy-env.yml
+    with:
+      environment: us-stage
+      ASB_QUEUE_SUFFIX: ${{ inputs.ASB_QUEUE_SUFFIX || ' ' }}
+      EVENTHUB_CONSUMER_GROUP: ${{ inputs.EVENTHUB_CONSUMER_GROUP || 'ConsumerGroup1' }}
+      RELEASE_LABEL: ${{ inputs.RELEASE_LABEL || 'stable' }}
+      promoteFromDev: ${{ inputs.promoteFromDev || false }}
+      RESTART_PODS: ${{ inputs.RESTART_PODS || false }}
+    secrets: inherit
 
-          ENV="${{ matrix.environment }}"
-          SVC="${{ env.SERVICE_NAME }}"
+  us-prod:
+    name: us-prod
+    needs: us-stage
+    uses: ./.github/workflows/deploy-env.yml
+    with:
+      environment: us-prod
+      ASB_QUEUE_SUFFIX: ${{ inputs.ASB_QUEUE_SUFFIX || ' ' }}
+      EVENTHUB_CONSUMER_GROUP: ${{ inputs.EVENTHUB_CONSUMER_GROUP || 'ConsumerGroup1' }}
+      RELEASE_LABEL: ${{ inputs.RELEASE_LABEL || 'stable' }}
+      promoteFromDev: ${{ inputs.promoteFromDev || false }}
+      RESTART_PODS: ${{ inputs.RESTART_PODS || false }}
+    secrets: inherit
 
-          # Determine if this is a higher environment
-          HIGHER_ENVS="us-stage us-prod emea-stage emea-prod apac-stage apac-prod"
-          IS_HIGHER=false
-          for e in $HIGHER_ENVS; do
-            if [ "$ENV" = "$e" ]; then IS_HIGHER=true; break; fi
-          done
-          echo "IS_HIGHER_ENV=${IS_HIGHER}" >> $GITHUB_ENV
+  us-prod-dr:
+    name: us-prod-dr
+    needs: us-prod
+    uses: ./.github/workflows/deploy-env.yml
+    with:
+      environment: us-prod-dr
+      ASB_QUEUE_SUFFIX: ${{ inputs.ASB_QUEUE_SUFFIX || ' ' }}
+      EVENTHUB_CONSUMER_GROUP: ${{ inputs.EVENTHUB_CONSUMER_GROUP || 'ConsumerGroup1' }}
+      RELEASE_LABEL: ${{ inputs.RELEASE_LABEL || 'stable' }}
+      promoteFromDev: ${{ inputs.promoteFromDev || false }}
+      RESTART_PODS: ${{ inputs.RESTART_PODS || false }}
+    secrets: inherit
 
-          # EventHub Consumer Group
-          if [ "$IS_HIGHER" = "true" ]; then
-            echo "EVENTHUB_CONSUMER_GROUP=${{ env.EVENTHUB_CONSUMER_GROUP }}" >> $GITHUB_ENV
-          else
-            echo "EVENTHUB_CONSUMER_GROUP=\$Default" >> $GITHUB_ENV
-          fi
+  emea-stage:
+    name: emea-stage
+    needs: us-prod-dr
+    uses: ./.github/workflows/deploy-env.yml
+    with:
+      environment: emea-stage
+      ASB_QUEUE_SUFFIX: ${{ inputs.ASB_QUEUE_SUFFIX || ' ' }}
+      EVENTHUB_CONSUMER_GROUP: ${{ inputs.EVENTHUB_CONSUMER_GROUP || 'ConsumerGroup1' }}
+      RELEASE_LABEL: ${{ inputs.RELEASE_LABEL || 'stable' }}
+      promoteFromDev: ${{ inputs.promoteFromDev || false }}
+      RESTART_PODS: ${{ inputs.RESTART_PODS || false }}
+    secrets: inherit
 
-          # ver
-          echo "ver=${{ env.BUILD_ID }}" >> $GITHUB_ENV
+  emea-prod:
+    name: emea-prod
+    needs: emea-stage
+    uses: ./.github/workflows/deploy-env.yml
+    with:
+      environment: emea-prod
+      ASB_QUEUE_SUFFIX: ${{ inputs.ASB_QUEUE_SUFFIX || ' ' }}
+      EVENTHUB_CONSUMER_GROUP: ${{ inputs.EVENTHUB_CONSUMER_GROUP || 'ConsumerGroup1' }}
+      RELEASE_LABEL: ${{ inputs.RELEASE_LABEL || 'stable' }}
+      promoteFromDev: ${{ inputs.promoteFromDev || false }}
+      RESTART_PODS: ${{ inputs.RESTART_PODS || false }}
+    secrets: inherit
 
-          # Conditional naming for higher envs
-          if [ "$IS_HIGHER" = "true" ]; then
-            echo "CONFIGMAP_NAME=${SVC}-${K8S_SUFFIX}-configmap" >> $GITHUB_ENV
-            echo "DEPLOYMENT_NAME=${SVC}-${K8S_SUFFIX}" >> $GITHUB_ENV
-            echo "SECRETMAP_NAME=${SVC}-${K8S_SUFFIX}-secretmap" >> $GITHUB_ENV
-            echo "CONFIGMAP_YAML_NAME=${SVC}-${K8S_SUFFIX}-yaml" >> $GITHUB_ENV
-            echo "SERVICE_HOST_SUFFIX=-${K8S_SUFFIX}" >> $GITHUB_ENV
-            echo "K8S_RELEASE_LABEL=release: ${{ env.RELEASE_LABEL }}" >> $GITHUB_ENV
-          else
-            echo "CONFIGMAP_NAME=${SVC}-configmap" >> $GITHUB_ENV
-            echo "DEPLOYMENT_NAME=${SVC}" >> $GITHUB_ENV
-            echo "SECRETMAP_NAME=${SVC}-secretmap" >> $GITHUB_ENV
-            echo "CONFIGMAP_YAML_NAME=${SVC}-yaml" >> $GITHUB_ENV
-            echo "SERVICE_HOST_SUFFIX= " >> $GITHUB_ENV
-            echo "K8S_RELEASE_LABEL= " >> $GITHUB_ENV
-          fi
+  emea-prod-dr:
+    name: emea-prod-dr
+    needs: emea-prod
+    uses: ./.github/workflows/deploy-env.yml
+    with:
+      environment: emea-prod-dr
+      ASB_QUEUE_SUFFIX: ${{ inputs.ASB_QUEUE_SUFFIX || ' ' }}
+      EVENTHUB_CONSUMER_GROUP: ${{ inputs.EVENTHUB_CONSUMER_GROUP || 'ConsumerGroup1' }}
+      RELEASE_LABEL: ${{ inputs.RELEASE_LABEL || 'stable' }}
+      promoteFromDev: ${{ inputs.promoteFromDev || false }}
+      RESTART_PODS: ${{ inputs.RESTART_PODS || false }}
+    secrets: inherit
 
-      # ---------------------------------------------------------------
-      # 3. Validate & Set Branch Targets
-      # ---------------------------------------------------------------
-      - name: Validate & Set Branch Targets
-        run: |
-          CONFIG_BRANCH="${{ matrix.service.configBranch }}"
-          CONCOURSE_CORE="${{ env.CONCOURSE_CORE_CONFIG_BRANCH }}"
-          TECH_ENABLEMENT="${{ env.TECH_ENABLEMENT_CONFIG_BRANCH }}"
+  apac-stage:
+    name: apac-stage
+    needs: emea-prod-dr
+    uses: ./.github/workflows/deploy-env.yml
+    with:
+      environment: apac-stage
+      ASB_QUEUE_SUFFIX: ${{ inputs.ASB_QUEUE_SUFFIX || ' ' }}
+      EVENTHUB_CONSUMER_GROUP: ${{ inputs.EVENTHUB_CONSUMER_GROUP || 'ConsumerGroup1' }}
+      RELEASE_LABEL: ${{ inputs.RELEASE_LABEL || 'stable' }}
+      promoteFromDev: ${{ inputs.promoteFromDev || false }}
+      RESTART_PODS: ${{ inputs.RESTART_PODS || false }}
+    secrets: inherit
 
-          # If configBranch is set, use it for both
-          if [ -n "$CONFIG_BRANCH" ]; then
-            echo "concourseCoreConfigBranch=${CONFIG_BRANCH}" >> $GITHUB_ENV
-            echo "techEnablementConfigBranch=${CONFIG_BRANCH}" >> $GITHUB_ENV
-          elif [ -n "$CONCOURSE_CORE" ] && [ -n "$TECH_ENABLEMENT" ]; then
-            echo "concourseCoreConfigBranch=${CONCOURSE_CORE}" >> $GITHUB_ENV
-            echo "techEnablementConfigBranch=${TECH_ENABLEMENT}" >> $GITHUB_ENV
-          elif [ -n "$TECH_ENABLEMENT" ] && [ -z "$CONCOURSE_CORE" ]; then
-            echo "Defaulting concourseCoreConfigBranch to main"
-            echo "concourseCoreConfigBranch=main" >> $GITHUB_ENV
-            echo "techEnablementConfigBranch=${TECH_ENABLEMENT}" >> $GITHUB_ENV
-          elif [ -z "$TECH_ENABLEMENT" ] && [ -n "$CONCOURSE_CORE" ]; then
-            echo "Defaulting techEnablementConfigBranch to main"
-            echo "concourseCoreConfigBranch=${CONCOURSE_CORE}" >> $GITHUB_ENV
-            echo "techEnablementConfigBranch=main" >> $GITHUB_ENV
-          else
-            echo "::error::Both concourseCoreConfigBranch and techEnablementConfigBranch are missing"
-            exit 1
-          fi
+  apac-prod:
+    name: apac-prod
+    needs: apac-stage
+    uses: ./.github/workflows/deploy-env.yml
+    with:
+      environment: apac-prod
+      ASB_QUEUE_SUFFIX: ${{ inputs.ASB_QUEUE_SUFFIX || ' ' }}
+      EVENTHUB_CONSUMER_GROUP: ${{ inputs.EVENTHUB_CONSUMER_GROUP || 'ConsumerGroup1' }}
+      RELEASE_LABEL: ${{ inputs.RELEASE_LABEL || 'stable' }}
+      promoteFromDev: ${{ inputs.promoteFromDev || false }}
+      RESTART_PODS: ${{ inputs.RESTART_PODS || false }}
+    secrets: inherit
 
-      # ---------------------------------------------------------------
-      # 4. Switch ConcourseCore Branch (kube config)
-      # ---------------------------------------------------------------
-      - name: Switch ConcourseCore Branch (kube config)
-        run: |
-          git config --global user.email "you@example.com"
-          git config --global user.name "GitHub Actions"
-          git fetch --all
-          git checkout -b "${{ env.concourseCoreConfigBranch }}" "origin/${{ env.concourseCoreConfigBranch }}" \
-            || git checkout "${{ env.concourseCoreConfigBranch }}"
-          git pull origin "${{ env.concourseCoreConfigBranch }}"
-
-      # ---------------------------------------------------------------
-      # 5. Switch Tech-Enablement Branch (for docker.k8.yml)
-      # ---------------------------------------------------------------
-      - name: Switch Tech-Enablement Branch (for docker.k8.yml)
-        run: |
-          git fetch --all
-          git switch "${{ env.techEnablementConfigBranch }}"
-
-      # ---------------------------------------------------------------
-      # 6. Get Versions From Dev (optional)
-      # ---------------------------------------------------------------
-      - name: Get Versions From Dev
-        if: ${{ inputs.promoteFromDev == true }}
-        run: |
-          BUILD_ID_RESPONSE=$(curl -s https://concourse-api-qa.pwc.com/v3/${{ env.CONTEXT_PATH }}/health)
-          BUILD_ID=$(echo "$BUILD_ID_RESPONSE" | jq -r '.metadata.appVersion' | sed 's/.202/-202/g')
-          echo "BUILD_ID: ${BUILD_ID}"
-          echo "ver=${BUILD_ID}" >> $GITHUB_ENV
-
-      # ---------------------------------------------------------------
-      # 7. Copy Manifest Templates
-      # ---------------------------------------------------------------
-      - name: Copy Manifest Templates
-        run: |
-          cp -v ConcourseCore/k8s/microservice-template/service.yaml \
-                ConcourseCore/k8s/${{ env.SERVICE_NAME }}/service.yaml
-
-      # ---------------------------------------------------------------
-      # 8. Update SERVICE_HOST (higher envs only)
-      # ---------------------------------------------------------------
-      - name: Update SERVICE_HOST
-        if: ${{ env.IS_HIGHER_ENV == 'true' }}
-        run: |
-          FILE_PATH=$GITHUB_WORKSPACE/tech-enablement/config/docker.k8.yml
-
-          echo "Pre Replace"
-          grep SERVICE_HOST "$FILE_PATH"
-
-          grep "SERVICE_HOST" "$FILE_PATH" | grep "svc" | grep -v auth-svc | while read -r line; do
-            service_name=$(echo "$line" | sed -n 's/.*SERVICE_HOST: "\(.*-svc\)".*/\1/p')
-            pattern="SERVICE_HOST: \"$service_name\""
-            replacement="SERVICE_HOST: \"$service_name-${K8S_SUFFIX}\""
-            sed -e "s/$pattern/$replacement/g" -i "$FILE_PATH"
-          done
-
-          echo -e "\nPost Replace"
-          grep SERVICE_HOST "$FILE_PATH"
-
-      # ---------------------------------------------------------------
-      # 9. Set Replicas to 2 (specific services in higher envs)
-      # ---------------------------------------------------------------
-      - name: Set Replicas to 2
-        run: |
-          SVC_REPLICAS=(
-            "concourse-appintegrations-mgmt-svc"
-            "concourse-auth-svc"
-            "concourse-chat-svc"
-            "concourse-deliverables-svc"
-            "concourse-deliverymap-svc"
-            "concourse-digital-assets-svc"
-            "concourse-engagement-svc"
-            "concourse-integration-ai-svc"
-            "concourse-integration-ipaas-svc"
-            "concourse-integration-jira-svc"
-            "concourse-integration-miro-svc"
-            "concourse-integration-ms365-sharepoint-svc"
-            "concourse-integration-provision-svc"
-            "concourse-integration-pwcinternal-svc"
-            "concourse-notification-svc"
-            "concourse-notificationserver-svc"
-            "concourse-pursuit-scope-svc"
-            "concourse-raid-svc"
-            "concourse-reports-svc"
-            "concourse-user-profile-svc"
-            "concourse-estimation-models-svc"
-          )
-          LOWER_ENVS=("us-dev" "us-qa" "us-int")
-          if [[ "${SVC_REPLICAS[*]}" =~ "${{ env.SERVICE_NAME }}" ]] && ! [[ "${LOWER_ENVS[*]}" =~ "${{ matrix.environment }}" ]]; then
-            echo "REPLICAS=2" >> $GITHUB_ENV
-            echo "REPLICAS set to 2"
-          else
-            echo "Skip - using default replicas"
-          fi
-
-      # ---------------------------------------------------------------
-      # 10. Replace Tokens
-      # ---------------------------------------------------------------
-      - name: Replace Tokens
-        env:
-          ver: ${{ env.ver }}
-          DEPLOYMENT_NAME: ${{ env.DEPLOYMENT_NAME }}
-          K8S_NAMESPACE_MESH: ${{ env.K8S_NAMESPACE_MESH }}
-          REPLICAS: ${{ env.REPLICAS }}
-          SERVICE_NAME: ${{ env.SERVICE_NAME }}
-          CONFIGMAP_NAME: ${{ env.CONFIGMAP_NAME }}
-          CONFIGMAP_YAML_NAME: ${{ env.CONFIGMAP_YAML_NAME }}
-          RELEASE_LABEL: ${{ env.RELEASE_LABEL }}
-          SERVICE_HOST_SUFFIX: ${{ env.SERVICE_HOST_SUFFIX }}
-          K8S_RELEASE_LABEL: ${{ env.K8S_RELEASE_LABEL }}
-          SECRETMAP_NAME: ${{ env.SECRETMAP_NAME }}
-        run: |
-          TARGET_FILES=(
-            "ConcourseCore/k8s/${{ env.SERVICE_NAME }}/service.yaml"
-            "$GITHUB_WORKSPACE/tech-enablement/config/docker.k8.yml"
-            "ConcourseCore/k8s/${{ env.SERVICE_NAME }}/deployment.yaml"
-            "ConcourseCore/k8s/${{ env.SERVICE_NAME }}/hpa.yaml"
-            "ConcourseCore/k8s/${{ env.SERVICE_NAME }}/configs/us-dev/${{ env.SERVICE_NAME }}.configmap.yaml"
-          )
-          for file in "${TARGET_FILES[@]}"; do
-            if [ -f "$file" ]; then
-              echo "Processing: $file"
-              tokens=$(grep -oP '<\{[^}]+\}>' "$file" | sort -u | sed 's/<{//;s/}>//')
-              for token in $tokens; do
-                value="${!token}"
-                if [ -n "$value" ]; then
-                  sed -i "s|<{${token}}>|${value}|g" "$file"
-                else
-                  echo "WARNING: No value for token: $token, using defaultValue"
-                  sed -i "s|<{${token}}>|defaultValue|g" "$file"
-                fi
-              done
-            else
-              echo "File not found, skipping: $file"
-            fi
-          done
-
-      # ---------------------------------------------------------------
-      # 11. Create YAML Config (append docker.k8.yml into configmap)
-      # ---------------------------------------------------------------
-      - name: Create YAML Config
-        run: |
-          CONFIGMAP_FILE="ConcourseCore/k8s/${{ env.SERVICE_NAME }}/configs/us-dev/${{ env.SERVICE_NAME }}.configmap.yaml"
-
-          echo "
-          ---
-
-          apiVersion: v1
-          kind: ConfigMap
-          metadata:
-            name: ${{ env.CONFIGMAP_YAML_NAME }}
-            namespace: ${{ env.MESH_K8S_NAMESPACE }}
-          data:
-            config.yaml: |
-          " >> "$CONFIGMAP_FILE"
-
-          cat $GITHUB_WORKSPACE/tech-enablement/config/docker.k8.yml | sed -e 's/^/    /' >> "$CONFIGMAP_FILE"
-
-      # ---------------------------------------------------------------
-      # 12. Azure Login
-      # ---------------------------------------------------------------
-      - name: Azure Login
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      # ---------------------------------------------------------------
-      # 13. Set AKS Context
-      # ---------------------------------------------------------------
-      - name: Set AKS Context
-        uses: azure/aks-set-context@v4
-        with:
-          resource-group: ${{ secrets.AKS_RESOURCE_GROUP }}
-          cluster-name: ${{ secrets.AKS_CLUSTER_NAME }}
-
-      # ---------------------------------------------------------------
-      # 14. Deploy ConfigMap
-      # ---------------------------------------------------------------
-      - name: Deploy ConfigMap
-        run: |
-          kubectl apply -f "ConcourseCore/k8s/${{ env.SERVICE_NAME }}/configs/us-dev/${{ env.SERVICE_NAME }}.configmap.yaml" \
-            -n ${{ env.MESH_K8S_NAMESPACE }}
-
-      # ---------------------------------------------------------------
-      # 15. Cat Deployment.yaml (debug)
-      # ---------------------------------------------------------------
-      - name: Cat Deployment.yaml
-        run: |
-          cat "ConcourseCore/k8s/${{ env.SERVICE_NAME }}/deployment.yaml"
-
-      # ---------------------------------------------------------------
-      # 16. Deploy Deployment
-      # ---------------------------------------------------------------
-      - name: Deploy Deployment
-        continue-on-error: true
-        run: |
-          kubectl apply -f "ConcourseCore/k8s/${{ env.SERVICE_NAME }}/deployment.yaml" \
-            -n ${{ env.MESH_K8S_NAMESPACE }}
-          kubectl rollout status deployment/${{ env.DEPLOYMENT_NAME }} \
-            -n ${{ env.MESH_K8S_NAMESPACE }} --timeout=600s
-
-      - name: Debug Rollout Failure
-        if: failure()
-        run: |
-          echo "=== Deployment Status ==="
-          kubectl get deployment ${{ env.DEPLOYMENT_NAME }} -n ${{ env.MESH_K8S_NAMESPACE }} -o wide
-
-          echo ""
-          echo "=== ReplicaSets ==="
-          kubectl get rs -n ${{ env.MESH_K8S_NAMESPACE }} -l tags.datadoghq.com/service=${{ env.SERVICE_NAME }}
-
-          echo ""
-          echo "=== Pod Status ==="
-          kubectl get pods -n ${{ env.MESH_K8S_NAMESPACE }} -l tags.datadoghq.com/service=${{ env.SERVICE_NAME }} -o wide
-
-          echo ""
-          echo "=== Describe Pods (latest) ==="
-          PODS=$(kubectl get pods -n ${{ env.MESH_K8S_NAMESPACE }} -l tags.datadoghq.com/service=${{ env.SERVICE_NAME }} --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1].metadata.name}')
-          for pod in $PODS; do
-            echo "--- Pod: $pod ---"
-            kubectl describe pod "$pod" -n ${{ env.MESH_K8S_NAMESPACE }} | tail -40
-          done
-
-          echo ""
-          echo "=== Pod Logs (latest) ==="
-          for pod in $PODS; do
-            echo "--- Logs: $pod ---"
-            kubectl logs "$pod" -n ${{ env.MESH_K8S_NAMESPACE }} --all-containers --tail=50 2>&1 || true
-          done
-
-          echo ""
-          echo "=== Events (last 5 min) ==="
-          kubectl get events -n ${{ env.MESH_K8S_NAMESPACE }} --sort-by='.lastTimestamp' | tail -30
-
-      # ---------------------------------------------------------------
-      # 17. Deploy Service
-      # ---------------------------------------------------------------
-      - name: Deploy Service
-        run: |
-          kubectl apply -f "ConcourseCore/k8s/${{ env.SERVICE_NAME }}/service.yaml" \
-            -n ${{ env.MESH_K8S_NAMESPACE }}
-
-      # ---------------------------------------------------------------
-      # 18. Deploy HPA (higher envs + specific services only)
-      # ---------------------------------------------------------------
-      - name: Deploy HPA
-        if: |
-          contains(fromJSON('["us-perf","us-stage","us-prod","emea-stage","emea-prod","apac-stage","apac-prod"]'), matrix.environment) &&
-          contains(fromJSON('["concourse-integration-ai-svc","concourse-deliverymap-svc","concourse-engagement-svc","concourse-user-profile-svc","concourse-chat-svc"]'), env.SERVICE_NAME)
-        run: |
-          kubectl apply -f "ConcourseCore/k8s/${{ env.SERVICE_NAME }}/hpa.yaml" \
-            -n ${{ env.MESH_K8S_NAMESPACE }}
-
-      # ---------------------------------------------------------------
-      # 19. Rolling Restart (optional)
-      # ---------------------------------------------------------------
-      - name: Rolling Restart
-        if: ${{ inputs.RESTART_PODS == true }}
-        run: |
-          kubectl rollout restart deployment/${{ env.DEPLOYMENT_NAME }} \
-            -n ${{ env.MESH_K8S_NAMESPACE }}
+  apac-prod-dr:
+    name: apac-prod-dr
+    needs: apac-prod
+    uses: ./.github/workflows/deploy-env.yml
+    with:
+      environment: apac-prod-dr
+      ASB_QUEUE_SUFFIX: ${{ inputs.ASB_QUEUE_SUFFIX || ' ' }}
+      EVENTHUB_CONSUMER_GROUP: ${{ inputs.EVENTHUB_CONSUMER_GROUP || 'ConsumerGroup1' }}
+      RELEASE_LABEL: ${{ inputs.RELEASE_LABEL || 'stable' }}
+      promoteFromDev: ${{ inputs.promoteFromDev || false }}
+      RESTART_PODS: ${{ inputs.RESTART_PODS || false }}
+    secrets: inherit
