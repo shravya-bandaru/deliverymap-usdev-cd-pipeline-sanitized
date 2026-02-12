@@ -1,6 +1,6 @@
 name: Deploy Microservice
 
-run-name: ${{ inputs.ENVIRONMENT }} - ${{ github.ref_name }}
+run-name: All Environments - ${{ github.ref_name }}
 
 on:
   push:
@@ -8,26 +8,6 @@ on:
       - changestogithubworkflow
   workflow_dispatch:
     inputs:
-      ENVIRONMENT:
-        description: 'Target environment'
-        required: true
-        type: choice
-        default: us-dev
-        options:
-          - us-dev
-          - us-qa
-          - us-perf
-          - us-int
-          - us-stage
-          - us-prod
-          - us-prod-dr
-          - emea-stage
-          - emea-prod
-          - emea-prod-dr
-          - apac-stage
-          - apac-prod
-          - apac-prod-dr
-
       ASB_QUEUE_SUFFIX:
         description: 'ASB Queue Suffix'
         required: true
@@ -50,7 +30,7 @@ on:
         description: 'Release label'
         required: false
         type: string
-        default: 'test'
+        default: 'stable'
 
       promoteFromDev:
         description: 'Promote versions from Dev?'
@@ -66,28 +46,40 @@ on:
 
 # Global environment variables
 env:
-  ENVIRONMENT: ${{ inputs.ENVIRONMENT || 'us-dev' }}
   ASB_QUEUE_SUFFIX: ${{ inputs.ASB_QUEUE_SUFFIX || ' ' }}
   EVENTHUB_CONSUMER_GROUP: ${{ inputs.EVENTHUB_CONSUMER_GROUP || 'ConsumerGroup1' }}
-  RELEASE_LABEL: ${{ inputs.RELEASE_LABEL || 'test' }}
+  RELEASE_LABEL: ${{ inputs.RELEASE_LABEL || 'stable' }}
   RESTART_PODS: ${{ inputs.RESTART_PODS || false }}
   PROMOTE_FROM_DEV: ${{ inputs.promoteFromDev || false }}
-  MESH_K8S_NAMESPACE: co-mesh
-  K8S_NAMESPACE_MESH: co-mesh
+  MESH_K8S_NAMESPACE: co-mesh-test
+  K8S_NAMESPACE_MESH: co-mesh-test
 
 permissions:
-  id-token: write   # Required for Azure OIDC login
   contents: read
 
 jobs:
   deploy:
-    name: ${{ matrix.service.shortName }}
+    name: ${{ matrix.environment }} / ${{ matrix.service.shortName }}
     runs-on: ubuntu-latest
-    environment: ${{ inputs.ENVIRONMENT }}
 
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
+        environment:
+          - us-dev
+          - us-qa
+          - us-perf
+          - us-int
+          - us-stage
+          - us-prod
+          - us-prod-dr
+          - emea-stage
+          - emea-prod
+          - emea-prod-dr
+          - apac-stage
+          - apac-prod
+          - apac-prod-dr
         service:
           - name: concourse-deliverymap-svc
             shortName: deliverymap
@@ -110,6 +102,7 @@ jobs:
       BUILD_ID: ${{ matrix.service.buildId }}
       CONCOURSE_CORE_CONFIG_BRANCH: ${{ matrix.service.concourseCoreConfigBranch }}
       TECH_ENABLEMENT_CONFIG_BRANCH: ${{ matrix.service.techEnablementConfigBranch }}
+      ENVIRONMENT: ${{ matrix.environment }}
       REPLICAS: '1'
 
     steps:
@@ -131,7 +124,7 @@ jobs:
           K8S_SUFFIX=$(echo "${{ inputs.RELEASE_LABEL }}" | tr '.' '-' | tr '[:upper:]' '[:lower:]')
           echo "K8S_SUFFIX=${K8S_SUFFIX}" >> $GITHUB_ENV
 
-          ENV="${{ inputs.ENVIRONMENT }}"
+          ENV="${{ matrix.environment }}"
           SVC="${{ env.SERVICE_NAME }}"
 
           # Determine if this is a higher environment
@@ -287,7 +280,7 @@ jobs:
             "concourse-estimation-models-svc"
           )
           LOWER_ENVS=("us-dev" "us-qa" "us-int")
-          if [[ "${SVC_REPLICAS[*]}" =~ "${{ env.SERVICE_NAME }}" ]] && ! [[ "${LOWER_ENVS[*]}" =~ "${{ inputs.ENVIRONMENT }}" ]]; then
+          if [[ "${SVC_REPLICAS[*]}" =~ "${{ env.SERVICE_NAME }}" ]] && ! [[ "${LOWER_ENVS[*]}" =~ "${{ matrix.environment }}" ]]; then
             echo "REPLICAS=2" >> $GITHUB_ENV
             echo "REPLICAS set to 2"
           else
@@ -316,7 +309,7 @@ jobs:
             "$GITHUB_WORKSPACE/tech-enablement/config/docker.k8.yml"
             "ConcourseCore/k8s/${{ env.SERVICE_NAME }}/deployment.yaml"
             "ConcourseCore/k8s/${{ env.SERVICE_NAME }}/hpa.yaml"
-            "ConcourseCore/k8s/${{ env.SERVICE_NAME }}/configs/${{ inputs.ENVIRONMENT }}/${{ env.SERVICE_NAME }}.configmap.yaml"
+            "ConcourseCore/k8s/${{ env.SERVICE_NAME }}/configs/${{ matrix.environment }}/${{ env.SERVICE_NAME }}.configmap.yaml"
           )
           for file in "${TARGET_FILES[@]}"; do
             if [ -f "$file" ]; then
@@ -341,7 +334,7 @@ jobs:
       # ---------------------------------------------------------------
       - name: Create YAML Config
         run: |
-          CONFIGMAP_FILE="ConcourseCore/k8s/${{ env.SERVICE_NAME }}/configs/${{ inputs.ENVIRONMENT }}/${{ env.SERVICE_NAME }}.configmap.yaml"
+          CONFIGMAP_FILE="ConcourseCore/k8s/${{ env.SERVICE_NAME }}/configs/${{ matrix.environment }}/${{ env.SERVICE_NAME }}.configmap.yaml"
 
           echo "
           ---
@@ -358,7 +351,7 @@ jobs:
           cat $GITHUB_WORKSPACE/tech-enablement/config/docker.k8.yml | sed -e 's/^/    /' >> "$CONFIGMAP_FILE"
 
       # ---------------------------------------------------------------
-      # 12. Azure Login (OIDC)
+      # 12. Azure Login
       # ---------------------------------------------------------------
       - name: Azure Login
         uses: azure/login@v2
@@ -379,7 +372,7 @@ jobs:
       # ---------------------------------------------------------------
       - name: Deploy ConfigMap
         run: |
-          kubectl apply -f "ConcourseCore/k8s/${{ env.SERVICE_NAME }}/configs/${{ inputs.ENVIRONMENT }}/${{ env.SERVICE_NAME }}.configmap.yaml" \
+          kubectl apply -f "ConcourseCore/k8s/${{ env.SERVICE_NAME }}/configs/${{ matrix.environment }}/${{ env.SERVICE_NAME }}.configmap.yaml" \
             -n ${{ env.MESH_K8S_NAMESPACE }}
 
       # ---------------------------------------------------------------
@@ -393,6 +386,7 @@ jobs:
       # 16. Deploy Deployment
       # ---------------------------------------------------------------
       - name: Deploy Deployment
+        continue-on-error: true
         run: |
           kubectl apply -f "ConcourseCore/k8s/${{ env.SERVICE_NAME }}/deployment.yaml" \
             -n ${{ env.MESH_K8S_NAMESPACE }}
@@ -445,7 +439,7 @@ jobs:
       # ---------------------------------------------------------------
       - name: Deploy HPA
         if: |
-          contains(fromJSON('["us-perf","us-stage","us-prod","emea-stage","emea-prod","apac-stage","apac-prod"]'), inputs.ENVIRONMENT) &&
+          contains(fromJSON('["us-perf","us-stage","us-prod","emea-stage","emea-prod","apac-stage","apac-prod"]'), matrix.environment) &&
           contains(fromJSON('["concourse-integration-ai-svc","concourse-deliverymap-svc","concourse-engagement-svc","concourse-user-profile-svc","concourse-chat-svc"]'), env.SERVICE_NAME)
         run: |
           kubectl apply -f "ConcourseCore/k8s/${{ env.SERVICE_NAME }}/hpa.yaml" \
