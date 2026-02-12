@@ -121,7 +121,7 @@ jobs:
       - name: Set derived variables
         run: |
           # K8S_SUFFIX = release label lowered with dots replaced by dashes
-          K8S_SUFFIX=$(echo "${{ inputs.RELEASE_LABEL }}" | tr '.' '-' | tr '[:upper:]' '[:lower:]')
+          K8S_SUFFIX=$(echo "${{ env.RELEASE_LABEL }}" | tr '.' '-' | tr '[:upper:]' '[:lower:]')
           echo "K8S_SUFFIX=${K8S_SUFFIX}" >> $GITHUB_ENV
 
           ENV="${{ matrix.environment }}"
@@ -137,7 +137,7 @@ jobs:
 
           # EventHub Consumer Group
           if [ "$IS_HIGHER" = "true" ]; then
-            echo "EVENTHUB_CONSUMER_GROUP=${{ inputs.EVENTHUB_CONSUMER_GROUP }}" >> $GITHUB_ENV
+            echo "EVENTHUB_CONSUMER_GROUP=${{ env.EVENTHUB_CONSUMER_GROUP }}" >> $GITHUB_ENV
           else
             echo "EVENTHUB_CONSUMER_GROUP=\$Default" >> $GITHUB_ENV
           fi
@@ -152,7 +152,7 @@ jobs:
             echo "SECRETMAP_NAME=${SVC}-${K8S_SUFFIX}-secretmap" >> $GITHUB_ENV
             echo "CONFIGMAP_YAML_NAME=${SVC}-${K8S_SUFFIX}-yaml" >> $GITHUB_ENV
             echo "SERVICE_HOST_SUFFIX=-${K8S_SUFFIX}" >> $GITHUB_ENV
-            echo "K8S_RELEASE_LABEL=release: ${{ inputs.RELEASE_LABEL }}" >> $GITHUB_ENV
+            echo "K8S_RELEASE_LABEL=release: ${{ env.RELEASE_LABEL }}" >> $GITHUB_ENV
           else
             echo "CONFIGMAP_NAME=${SVC}-configmap" >> $GITHUB_ENV
             echo "DEPLOYMENT_NAME=${SVC}" >> $GITHUB_ENV
