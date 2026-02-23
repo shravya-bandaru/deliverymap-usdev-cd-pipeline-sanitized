@@ -37,11 +37,6 @@ on:
         required: false
         type: string
         default: "DoNotFail"
-      stop-scan:
-        description: "Stop scan when workflow ends"
-        required: false
-        type: string
-        default: "true"
       download-artifacts:
         description: "Download build artifacts before scanning"
         required: false
@@ -121,4 +116,3 @@ jobs:
           base-url: ${{ inputs.netsparker-endpoint }}
           scan-type: ${{ inputs.scan-type }}
           fail-on-level: ${{ inputs.severity }}
-          stop-scan: ${{ inputs.stop-scan }}

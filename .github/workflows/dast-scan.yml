@@ -63,7 +63,6 @@ jobs:
       netsparker-profile-id: ${{ vars.NETSPARKER_PROFILE_ID }}
       scan-type: "FullWithSelectedProfile"
       severity: "DoNotFail"
-      stop-scan: "true"
     secrets:
       NETSPARKER_USER_ID: ${{ secrets.NETSPARKER_USER_ID }}
       NETSPARKER_API_TOKEN: ${{ secrets.NETSPARKER_API_TOKEN }}
