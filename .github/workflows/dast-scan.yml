@@ -23,6 +23,10 @@ on:
   schedule:
     - cron: "0 22 * * *"
 
+  push:
+    branches:
+      - dastscan
+
   # ---- Manual trigger with environment selection ----
   # Mirrors: parameters > ENVIRONMENT from ADO
   workflow_dispatch:
