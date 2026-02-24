@@ -1,0 +1,92 @@
+# =============================================================================
+# scan-netsparker — Composite GitHub Action
+# Equivalent of: scan-netsparker.yaml (ADO template)
+#
+# Netsparker-specific scan action that:
+#   1. Calls scan-base (composite action) for artifact download & checkout
+#   2. Runs the official Netsparker GitHub Action for the DAST scan
+#
+# This mirrors the ADO pattern where scan-netsparker.yaml wraps
+# scan-base.yaml and injects the netsparker-cloud@1 task.
+# =============================================================================
+
+name: "Netsparker DAST Scan"
+description: "Run an Invicti (Netsparker) DAST scan with base setup"
+
+inputs:
+  # --- Netsparker-specific ---
+  netsparker-endpoint:
+    description: "Invicti API base URL (e.g. https://www.netsparkercloud.com)"
+    required: true
+  netsparker-website-id:
+    description: "Invicti target website ID"
+    required: true
+  netsparker-profile-id:
+    description: "Invicti scan profile ID"
+    required: true
+  netsparker-user-id:
+    description: "Invicti API User ID"
+    required: true
+  netsparker-api-token:
+    description: "Invicti API Token"
+    required: true
+  scan-type:
+    description: "Scan type (FullWithPrimaryProfile, FullWithSelectedProfile, Incremental, Recan)"
+    required: false
+    default: "FullWithSelectedProfile"
+  severity:
+    description: "Fail-on severity level (DoNotFail, Critical, High, Medium, Low, BestPractice)"
+    required: false
+    default: "DoNotFail"
+  # --- Base inputs (passed through to scan-base) ---
+  download-artifacts:
+    description: "Download build artifacts before scanning"
+    required: false
+    default: "false"
+  artifact-name:
+    description: "Name of the artifact to download"
+    required: false
+    default: "Build"
+  debug:
+    description: "Enable debug output"
+    required: false
+    default: "false"
+
+runs:
+  using: "composite"
+  steps:
+    # =================== BASE SETUP ===================
+    # Calls the scan-base composite action for artifact download & checkout
+    - name: Run base scan setup
+      uses: ./.github/actions/scan-base
+      with:
+        download-artifacts: ${{ inputs.download-artifacts }}
+        artifact-name: ${{ inputs.artifact-name }}
+        debug: ${{ inputs.debug }}
+
+    # =================== DEBUG (Netsparker-specific) ===================
+    - name: Debug — Print Netsparker configuration
+      if: inputs.debug == 'true'
+      shell: bash
+      run: |
+        echo "===== Netsparker Scan Configuration ====="
+        echo "Endpoint:    ${{ inputs.netsparker-endpoint }}"
+        echo "Website ID:  ${{ inputs.netsparker-website-id }}"
+        echo "Profile ID:  ${{ inputs.netsparker-profile-id }}"
+        echo "Scan Type:   ${{ inputs.scan-type }}"
+        echo "Severity:    ${{ inputs.severity }}"
+        echo "============================================"
+
+    # =================== NETSPARKER SCAN ===================
+    # Uses the official Netsparker GitHub Action — direct equivalent
+    # of the ADO netsparker-cloud@1 task.
+    - name: Run Netsparker DAST Scan
+      uses: netsparker/Netsparker-Cloud-GitHub-Actions@v1.0.1
+      with:
+        website-id: ${{ inputs.netsparker-website-id }}
+        profile-id: ${{ inputs.netsparker-profile-id }}
+        api-token: ${{ inputs.netsparker-api-token }}
+        user-id: ${{ inputs.netsparker-user-id }}
+        base-url: ${{ inputs.netsparker-endpoint }}
+        scan-type: ${{ inputs.scan-type }}
+        fail-on-level: ${{ inputs.severity }}

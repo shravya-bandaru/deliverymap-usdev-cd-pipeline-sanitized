@@ -1,0 +1,54 @@
+# =============================================================================
+# scan-base — Composite GitHub Action
+# Equivalent of: scan-base.yaml (ADO template)
+#
+# Generic scan orchestrator that handles:
+#   - Optional artifact download
+#   - Debug output
+#   - Repository checkout
+#
+# This is a composite action that can be nested inside other composite
+# actions (unlike reusable workflows which cannot chain).
+# =============================================================================
+
+name: "Scan Base"
+description: "Base scan orchestrator — handles artifact download, debug output, and checkout"
+
+inputs:
+  download-artifacts:
+    description: "Whether to download build artifacts before scanning"
+    required: false
+    default: "false"
+  artifact-name:
+    description: "Name of the artifact to download"
+    required: false
+    default: "Build"
+  debug:
+    description: "Enable debug output"
+    required: false
+    default: "false"
+
+runs:
+  using: "composite"
+  steps:
+    # ======================== DEBUG ========================
+    - name: Debug — Print configuration
+      if: inputs.debug == 'true'
+      shell: bash
+      run: |
+        echo "===== Scan Base Configuration ====="
+        echo "Download Artifacts:  ${{ inputs.download-artifacts }}"
+        echo "Artifact Name:       ${{ inputs.artifact-name }}"
+        echo "===================================="
+
+    # =================== ARTIFACT DOWNLOAD ===================
+    - name: Download build artifacts
+      if: inputs.download-artifacts == 'true'
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ github.workspace }}
+
+    # =================== CHECKOUT ============================
+    - name: Checkout repository
+      uses: actions/checkout@v4
