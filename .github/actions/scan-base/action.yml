@@ -48,7 +48,3 @@ runs:
       with:
         name: ${{ inputs.artifact-name }}
         path: ${{ github.workspace }}
-
-    # =================== CHECKOUT ============================
-    - name: Checkout repository
-      uses: actions/checkout@v4
