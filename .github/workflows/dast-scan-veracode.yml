@@ -28,7 +28,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Veracode Upload and Scan
-        uses: veracode/veracode-uploadandscan-action@v2.0
+        uses: veracode/veracode-uploadandscan-action@0.2.6
         with:
           vid: ${{ secrets.VERACODE_API_ID }}
           vkey: ${{ secrets.VERACODE_API_KEY }}
