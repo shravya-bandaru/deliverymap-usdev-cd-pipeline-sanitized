@@ -1,0 +1,37 @@
+name: DAST Scan (Veracode) - SAMPLE
+
+on:
+  push:
+    branches:
+      - veracoda
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        default: "us-dev"
+        options:
+          - us-dev
+          - us-qa
+          - us-int
+          - us-stage
+
+jobs:
+  veracode-scan:
+    name: veracode
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Veracode Upload and Scan
+        uses: veracode/veracode-uploadandscan-action@v2.0
+        with:
+          vid: ${{ secrets.VERACODE_API_ID }}
+          vkey: ${{ secrets.VERACODE_API_KEY }}
+          appname: "deliverymap-concourse"
+          filepath: "./"
+          scantimeout: 60
